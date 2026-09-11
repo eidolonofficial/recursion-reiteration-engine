@@ -12,6 +12,8 @@ from . import halting, prompts
 from .config import RecurseConfig, Tier, Verdict
 from .trace import RunTrace, StepTrace
 from .runtime import complete_prompt
+from .clients import TransportError
+from .worker_actions import checked_notes, record_rejection
 
 
 @dataclass
@@ -122,7 +124,7 @@ def run_tier(client, cfg: RecurseConfig, tier: Tier, problem: str,
     for _ in range(start_step, cfg.steps_for(tier)):
         client.check()
         step_start = time.monotonic()
-        prior_answer = answer
+        prior_answer, prior_notes = answer, scratchpad
         snippets, retrieval_error = _retrieve(cfg, problem, scratchpad)
         memory_context = ""
         if cfg.memory_session is not None:
@@ -146,6 +148,14 @@ def run_tier(client, cfg: RecurseConfig, tier: Tier, problem: str,
             text = result.text.strip()
             cut = result.stop_reason in {"max_tokens", "length"}
             if text and not cut:
+                try:
+                    checked_notes(text)
+                except TransportError:
+                    trace.feedback = "Return working notes, not a tool request."
+                    rejected += 1
+                    record_rejection(trace, "note", text, cfg.max_repeated_rejections)
+                    client.flush()
+                    continue
                 scratchpad = text
                 trace.current_scratchpad = scratchpad
             else:
@@ -181,14 +191,14 @@ def run_tier(client, cfg: RecurseConfig, tier: Tier, problem: str,
                          and passed and not validator_error and eligible_output and progress.accepted)
         gate_rejected = bool(cfg.validator is not None and not cfg.oracle_sufficient
                              and not passed and not validator_error)
-        trace.current_rejected = gate_rejected or not progress.accepted
+        trace.current_rejected = bool(validator_error or gate_rejected or not eligible_output or not progress.accepted)
         judge_context, unsourced, flagged = judgment_context(
             cfg, problem, answer, passed=passed, validator_error=validator_error)
         judge_calls = 0
         valid_score = True
         if validated:
             score, reason = 1.0, "operator-supplied sufficient validator passed"
-        elif gate_rejected or not eligible_output or not progress.accepted:
+        elif validator_error or gate_rejected or not eligible_output or not progress.accepted:
             score, reason = 0.0, "mechanically rejected, regressed, or incomplete candidate; judge skipped"
             valid_score = False
         else:
@@ -205,8 +215,12 @@ def run_tier(client, cfg: RecurseConfig, tier: Tier, problem: str,
             valid_score = judgment.valid_votes > cfg.judge_votes // 2
         nonregression = (not cfg.enforce_progress or not trace.has_incumbent or
                          (trace.seed_scored and score >= trace.best_halt_prob) or validated)
-        accepted = bool(eligible_output and not gate_rejected and progress.accepted and valid_score and nonregression)
+        accepted = bool(eligible_output and not validator_error and not gate_rejected and progress.accepted and valid_score and nonregression)
+        converged = converged and accepted
         if accepted:
+            if answer != prior_answer:
+                trace.rejection_counts.clear()
+            trace.feedback = ""
             client.guard.commit(progress)
             trace.seed_scored = True
             trace.note_candidate(answer=answer, halt_prob=score, model=tier.model,
@@ -240,14 +254,16 @@ def run_tier(client, cfg: RecurseConfig, tier: Tier, problem: str,
             scratchpad += ("\n\n[REVISION REJECTED] Preserve the incumbent. " +
                            ("Lost obligations: " + ", ".join(progress.missing) if progress.missing else
                             "The proposal did not meet the common judge/validity baseline."))
+        if not accepted and cfg.enforce_progress and not trace.has_incumbent:
+            answer, scratchpad = prior_answer, prior_notes
         if cfg.feedback is not None and not halted:
-            feedback = _safe_feedback(cfg.feedback, rejected_answer)
-            if feedback:
-                scratchpad += f"\n\n[CHECKER FEEDBACK]\n{feedback}"
+            trace.feedback = _safe_feedback(cfg.feedback, rejected_answer)
         trace.current_answer, trace.current_scratchpad = answer, scratchpad
         client.flush()
         if accepted and cfg.memory_session is not None:
             client.memory_accept(problem, prior_answer, answer, scratchpad)
+        if not accepted:
+            record_rejection(trace, "candidate", rejected_answer, cfg.max_repeated_rejections)
         if halted:
             return TierResult(answer, scratchpad, True, reason_stop)
         if converged:

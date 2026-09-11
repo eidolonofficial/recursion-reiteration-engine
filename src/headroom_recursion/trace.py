@@ -85,6 +85,8 @@ class RunTrace:
     completed_steps: list[int] = field(default_factory=list)
     next_tier: int = 0
     resumed: bool = False
+    rejection_counts: dict[str, int] = field(default_factory=dict)
+    feedback: str = ""
 
     def add(self, step: StepTrace) -> None:
         self.steps.append(step)

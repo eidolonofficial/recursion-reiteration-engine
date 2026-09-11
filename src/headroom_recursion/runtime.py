@@ -40,6 +40,7 @@ class MeteredClient:
         self.memory_packet = ""
         self.memory_ready = False
         self.memory_pins = []
+        self.solve_map = None
         self.checkpoint = lambda: None
         prose = cfg.prose_compressor
         if cfg.use_headroom and cfg.compression_backend == "headroom":
@@ -68,6 +69,7 @@ class MeteredClient:
         self.memory_packet = ""
         self.memory_ready = False
         self.memory_pins = []
+        self.solve_map = None
         session=self.cfg.memory_session
         if session is None:
             return ""
@@ -75,8 +77,13 @@ class MeteredClient:
         try:
             selected=session.retrieve(problem[:1600],send=self._memory_send)
             text=selected.text
+            if self.cfg.workspace.solve_map and selected.records:
+                from .solve_map import SolveMap
+                self.solve_map=SolveMap(session,selected)
+                text=''
             self.memory_pins=list(selected.required_pins)
-            refs={ref:session.store.source(session.principal,ref) for ref in selected.source_refs}
+            refs=(dict(self.solve_map.sources) if self.solve_map is not None else
+                  {ref:session.store.source(session.principal,ref) for ref in selected.source_refs})
             if self.cfg.observation_ledger is not None:
                 observations=self.cfg.observation_ledger.view()
                 text += "\n" + observations['text']
@@ -112,6 +119,21 @@ class MeteredClient:
         request = dict(request, use_headroom=False)  # no hidden second compressor in a worker
         model = request["model"]
         before = self.meter.prompt(raw_system, raw_user, model)
+        framing=None
+        # Only known model-facing envelopes are eligible. Whole judgments and
+        # generic exact-data calls remain byte-identical; no archive is rewritten.
+        eligible=role in {'notes','answer','progress_seed','workspace_retrieval',
+                          'memory_controller','memory_selector','memory_writer','memory_consolidator'}
+        if self.cfg.compact_json_transport and eligible:
+            from .json_transport import compact_json
+            original=request['user'];compact=compact_json(original)
+            if compact!=original:
+                original_units=self.meter.prompt(request['system'],original,model)
+                compact_units=self.meter.prompt(request['system'],compact,model)
+                applied=compact_units<original_units
+                framing={'method':'lossless-json-whitespace','before':original_units,
+                         'after':compact_units if applied else original_units,'applied':applied}
+                if applied:request['user']=compact
         after = self.meter.prompt(request["system"], request["user"], model)
         if self.cfg.max_input_tokens is not None and after > self.cfg.max_input_tokens:
             raise ContextLimitError("protected input exceeds max_input_tokens; model was not called")
@@ -121,6 +143,7 @@ class MeteredClient:
         event = {"index": self.trace.attempted_calls, "model": model, "role": role,
                  "input_before": before, "input_after": after, "counter": self.meter.label,
                  "status": "attempted", "auxiliary": auxiliary}
+        if framing is not None:event["json_transport"]=framing
         self.trace.call_events.append(event)
         self.trace.reported_tokens_before += before
         self.trace.reported_tokens_after += after
@@ -167,6 +190,8 @@ class MeteredClient:
         # Judge sees obligations but not model-authored advisory checkpoint prose.
         if role in {"notes", "answer"}:
             prefix += self.seed.render(self.store)
+        if self.trace.feedback and role in {"notes", "answer"}:
+            prefix += "\n[HOST CHECKER FEEDBACK]\n" + self.trace.feedback
         raw_user += prefix
         refs: set[str] = set()
         event_start = len(self.trace.compression_events)

@@ -63,6 +63,7 @@ def _number(name: str, value: Any, *, minimum: float = 0,
 @dataclass
 class RecurseConfig:
     n: int = 6
+    max_repeated_rejections: int = 2
     T: int = 3
     ladder: tuple[Tier, ...] = DEFAULT_LADDER
     halt_threshold: float = 0.9
@@ -71,6 +72,7 @@ class RecurseConfig:
     # A folding campaign may use scores for ranking, never for declaring a proof.
     judge_can_halt: bool = True
     compress_judge: bool = False
+    compact_json_transport: bool = False  # measured lossless request framing only
     # Local prompt compression is active by default. No inference service is used.
     use_headroom: bool = True
     compression_backend: str = "local"  # local | headroom (already installed)
@@ -137,7 +139,8 @@ class RecurseConfig:
         from .workspace import WorkspacePolicy
         values = dict(workspace=WorkspacePolicy(budget=budget, compact=True,
                       chunk_chars=768, max_optional_chunks=6),
-                      progress_seed_mode="local", reuse_exact_judgments=True)
+                      progress_seed_mode="local", reuse_exact_judgments=True,
+                      compact_json_transport=True)
         values.update(overrides)
         return cls(**values)
 
@@ -164,11 +167,22 @@ class RecurseConfig:
         cfg.validate()
         return cfg
 
+    @classmethod
+    def simple(cls, *, model="local", workload="coding", rungs=1, budget=4096, **overrides):
+        """One proposal per step; arithmetic and acceptance stay in host callbacks."""
+        from dataclasses import replace
+        overrides.setdefault("n", 0)
+        cfg = cls.for_workload(workload, model=model, rungs=rungs, budget=budget, **overrides)
+        cfg.workspace = replace(cfg.workspace, typed_actions=True)
+        cfg.validate()
+        return cfg
+
     def steps_for(self, tier: Tier) -> int:
         return tier.max_steps if tier.max_steps is not None else self.T
 
     def validate(self) -> None:
-        _integer("n", self.n)
+        _integer("n", self.n, minimum=0)
+        _integer("max_repeated_rejections", self.max_repeated_rejections)
         _integer("T", self.T)
         if not isinstance(self.ladder, (tuple, list)) or not self.ladder:
             raise ValueError("ladder must contain at least one Tier")
@@ -209,6 +223,10 @@ class RecurseConfig:
             self.workspace.validate()
             if self.compress_judge:
                 raise ValueError("workspace mode requires exact full judge inputs")
+        if type(self.compact_json_transport) is not bool:
+            raise TypeError("compact_json_transport must be bool")
+        if self.workspace is not None and self.workspace.solve_map and self.memory_session is None:
+            raise ValueError("solve-map requires an explicitly scoped memory session")
         if self.memory_session is not None:
             from .memory import MemorySession
             if not isinstance(self.memory_session, MemorySession):

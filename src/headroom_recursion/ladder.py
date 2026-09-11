@@ -10,6 +10,7 @@ from .compression import ContextLimitError, MemoryLimitError
 from .progress import (PLAN_SYSTEM, LadderSeed, ProgressGuard, fallback_seed, parse_seed, seed_candidates)
 from .runtime import BudgetExhausted, CheckpointWriteError, MeteredClient
 from .trace import RunTrace
+from .worker_actions import RepeatedRejection
 
 # Compatibility for callers that inspected the former internal budget wrapper.
 _MeteredClient = MeteredClient
@@ -56,7 +57,7 @@ def _prepare_seed(metered: MeteredClient, cfg: RecurseConfig, trace: RunTrace,
             raise ValueError("truncated checkpoint proposal")
         selected = parse_seed(result.text, pool, max_keep=cfg.progress_k, meter=metered.meter,
                               model=model, token_budget=cfg.progress_tokens)
-    except (BudgetExhausted, KeyboardInterrupt, ContextLimitError, MemoryLimitError, CheckpointWriteError):
+    except (RepeatedRejection, BudgetExhausted, KeyboardInterrupt, ContextLimitError, MemoryLimitError, CheckpointWriteError):
         raise
     except Exception as exc:
         selected = replace(selected, status=f"fallback: {type(exc).__name__}")
@@ -79,6 +80,8 @@ def _grade_seed(metered, cfg, trace, problem, answer, notes, model) -> str:
         trace.progress_events.append({"event": "seed-rejected", "missing": list(decision.missing)})
         return "rejected"
     passed, error, verdict = trm._safe_validate(cfg.validator, answer)
+    if error:
+        return "unscored"
     if cfg.validator is not None and not cfg.oracle_sufficient and not passed and not error:
         trace.current_rejected = True
         if metered.guard.locked:
@@ -135,6 +138,8 @@ def recurse(problem: str, *, client, config: RecurseConfig | None = None) -> Run
     answer, notes, seed_model = cfg.seed_answer, cfg.seed_scratchpad, "seed"
     if restored:
         trace.resumed = True
+        trace.rejection_counts = dict(restored["rejection_counts"])
+        trace.feedback = restored["feedback"]
         trace.attempted_calls, trace.successful_calls = restored["attempted_calls"], restored["successful_calls"]
         trace.reported_tokens_before, trace.reported_tokens_after = restored["input_before"], restored["input_after"]
         trace.auxiliary_tokens = restored["auxiliary_tokens"]
@@ -170,7 +175,8 @@ def recurse(problem: str, *, client, config: RecurseConfig | None = None) -> Run
                                "model": trace.current_model},
                    "locked_checks": sorted(metered.guard.locked), "archive": dict(metered.store.records),
                    "input_before": trace.tokens_before, "input_after": trace.tokens_after,
-                   "auxiliary_tokens": trace.auxiliary_tokens}
+                   "auxiliary_tokens": trace.auxiliary_tokens,
+                   "rejection_counts": dict(trace.rejection_counts), "feedback": trace.feedback}
         try:
             checkpoint.save(cfg.checkpoint_path, payload)
         except Exception as exc:
@@ -190,6 +196,8 @@ def recurse(problem: str, *, client, config: RecurseConfig | None = None) -> Run
         return trace
 
     try:
+        if any(n >= cfg.max_repeated_rejections for n in trace.rejection_counts.values()):
+            return finish(False, "repeated-rejection")
         metered.flush()
         if cfg.memory_session is not None:
             metered.memory_context(problem, notes)
@@ -218,7 +226,7 @@ def recurse(problem: str, *, client, config: RecurseConfig | None = None) -> Run
             _prepare_seed(metered, cfg, trace, problem, answer, notes, index)
             try:
                 result = trm.run_tier(metered, cfg, tier, problem, answer, notes, trace, deadline, index)
-            except (BudgetExhausted, KeyboardInterrupt, ContextLimitError, MemoryLimitError, CheckpointWriteError):
+            except (RepeatedRejection, BudgetExhausted, KeyboardInterrupt, ContextLimitError, MemoryLimitError, CheckpointWriteError):
                 raise
             except Exception as exc:
                 trace.error = f"tier failed: {type(exc).__name__}"
@@ -241,6 +249,9 @@ def recurse(problem: str, *, client, config: RecurseConfig | None = None) -> Run
             trace.next_tier = index + 1
             metered.flush()
         return finish(False, stop_reason)
+    except RepeatedRejection as exc:
+        trace.error = str(exc)
+        return finish(False, "repeated-rejection")
     except BudgetExhausted:
         return finish(False, "budget")
     except (ContextLimitError, MemoryLimitError) as exc:

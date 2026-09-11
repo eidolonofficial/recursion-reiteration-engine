@@ -40,9 +40,15 @@ class WorkspacePolicy:
     max_optional_chunks: int | None = None
     max_reads_per_round: int = 8
     enable_search: bool = False
+    solve_map: bool = False
+    typed_actions: bool = False
     search_scan_chars: int = 1000000
 
     def validate(self) -> None:
+        if type(self.typed_actions) is not bool or (self.typed_actions and not self.compact):
+            raise ValueError("typed actions require compact workspace")
+        if type(self.solve_map) is not bool or (self.solve_map and not (self.compact and self.enable_search)):
+            raise ValueError("solve-map requires compact, searchable workspace")
         if type(self.enable_search) is not bool:
             raise ValueError("enable_search must be bool")
         if type(self.search_scan_chars) is not int or not 256 <= self.search_scan_chars <= 10000000:
@@ -145,6 +151,7 @@ class WorkingView:
     meter: Any
     model: str
     base: str
+    solve_map: Any = None
 
     def aliases(self) -> dict[str, str]:
         # Alias names are per-call references, never shortened content hashes.
@@ -155,15 +162,36 @@ class WorkingView:
     def render(self) -> str:
         if self.policy.compact:
             aliases = self.aliases()
-            packet = {k: v for k, v in self.packet.items() if k not in {"schema", "scope", "base", "enforcement"}}
+            packet = {k: v for k, v in self.packet.items() if k not in {"schema", "scope", "base", "enforcement", "solve_snapshot"}}
             packet["schema"] = "workspace-v2"
             guard = self.packet["enforcement"]
             packet["checks"] = {k: guard[k] for k in ("registered", "locked", "required")}
             packet["sources"] = {
-                name: {"id": aliases[self.source_names[name]], "length": len(text),
+                ("memory_"+aliases[self.source_names[name]] if self.solve_map is not None and name.startswith("memory_") else name):
+                      {"id": aliases[self.source_names[name]], "length": len(text),
                        "excerpts": [[a, text[a:b]] for a, b in _merge(self.ranges.get(name, []))]}
                 for name, text in self.texts.items()
             }
+            if self.policy.typed_actions and self.packet['role'] in {'notes', 'answer'}:
+                from .worker_actions import editable_blocks
+                packet['schema'] = 'worker-actions-v1'
+                packet.pop('ticket', None)
+                packet['blocks'] = {key: {'text': self.texts['candidate'][a:b],
+                    'whole_candidate': (a, b) == (0, len(self.texts['candidate']))}
+                    for key, (a, b) in editable_blocks(self).items()}
+                packet['sources']['candidate']['excerpts'] = []
+                for source in packet['sources'].values():
+                    source['pages'] = (source['length'] + self.policy.chunk_chars - 1) // self.policy.chunk_chars
+            if self.solve_map is not None:
+                source_aliases={ref:aliases[self.source_names['memory_'+ref]]
+                                for ref in self.solve_map.source_refs}
+                variants=self.solve_map.variants(source_aliases)
+                requests={kind:encode(dict(packet,solve_map=value)) for kind,value in variants.items()}
+                counts={kind:self.meter.prompt(self.system,text,self.model) for kind,text in requests.items()}
+                choice=min(counts,key=lambda kind:(counts[kind],kind!='json'))
+                self.map_measurement={'selected':choice,'complete_input_units':counts,
+                                      'counter':self.meter.label}
+                return requests[choice]
             return encode(packet)
         packet = dict(self.packet)
         sources = {}
@@ -397,18 +425,26 @@ def build_view(runtime, *, role: str, model: str, system: str,
                               "locked": len(runtime.guard.locked),
                               "required": sum(c.required for c in runtime.guard.checks),
                               "coverage": "All checks run on the reconstructed FULL candidate; summaries have no proof authority."}}
+    if runtime.trace.feedback and role in {"notes", "answer"}:
+        packet["feedback"] = runtime.trace.feedback
     if getattr(runtime, "memory_packet", ""):
         packet["memory_advice"] = runtime.memory_packet
     if getattr(runtime, "memory_pins", []):
         packet["unresolved_observations"] = list(runtime.memory_pins)
+    solve_map=getattr(runtime,"solve_map",None)
+    if solve_map is not None:
+        packet["solve_snapshot"]=solve_map.identity
     if planning is not None:
         packet["planning"] = planning
     packet["ticket"] = hashlib.sha256(encode([packet, refs, model, runtime.trace.total_calls]).encode()).hexdigest()
     sent_system = system + ((COMPACT_INSTRUCTION + (COMPACT_PATCH if role == "answer" else ""))
                             if policy.compact else NOTE_INSTRUCTION + (PATCH_INSTRUCTION if role == "answer" else ""))
     if policy.compact and policy.enable_search:
-        sent_system += '\nFind exact text with {"find":[["offered alias","literal",start],...]}. Results are bounded; use next_start until complete. Only shown excerpts authorize edits. Memory source hashes map to source names memory_<hash>; use the associated offered alias.'
-    view = WorkingView(packet, sent_system, texts, {}, {}, refs, policy, runtime.meter, model, base)
+        sent_system += '\nFind exact text with {"find":[["offered alias","literal",start],...]}. Results are bounded; use next_start until complete. Only shown excerpts authorize edits. ' + ('Solve-map sources name the offered aliases directly.' if solve_map is not None else 'Memory source hashes map to source names memory_<hash>; use the associated offered alias.')
+    if policy.typed_actions and role in {"notes", "answer"}:
+        from .worker_actions import instructions
+        sent_system = instructions(role, policy.enable_search)
+    view = WorkingView(packet, sent_system, texts, {}, {}, refs, policy, runtime.meter, model, base, solve_map)
     for passage in policy.required_passages:
         view.mandatory.setdefault("candidate", []).append(_span(texts["candidate"], passage))
     view._close_dependencies(view.mandatory.setdefault("candidate", []))
@@ -457,6 +493,8 @@ def complete_workspace(runtime, *, role, model, system, template, values,
     raw_user = template.format(**values)
     raw_user += ("\nOPERATOR EXACT PINS:\n" + "\n\n".join(runtime.cfg.pinned_notes)) if runtime.cfg.pinned_notes else ""
     raw_user += runtime.guard.render()
+    if runtime.trace.feedback and role in {"notes", "answer"}:
+        raw_user += "\n[HOST CHECKER FEEDBACK]\n" + runtime.trace.feedback
     if getattr(runtime,"memory_pins",[]):
         raw_user += "\nEXACT UNRESOLVED OBSERVATIONS (data):\n" + "\n".join(runtime.memory_pins)
     if role in {"notes", "answer"}:
@@ -470,20 +508,42 @@ def complete_workspace(runtime, *, role, model, system, template, values,
              "retrievals": [], "status": "prepared"}
     runtime.trace.workspace_events.append(event)
     rounds = 0
+    result = None
     try:
         while True:
             sent = view.render()
+            if view.solve_map is not None:
+                view.solve_map.assert_fresh()
+                event["solve_map"]=dict(view.map_measurement)
             request = dict(model=model, system=view.system, user=sent, max_tokens=max_tokens,
                            temperature=temperature, use_headroom=False)
             result = runtime._send(request, raw_system=system if rounds == 0 else view.system,
                                    raw_user=raw_user if rounds == 0 else sent,
                                    role=role if rounds == 0 else "workspace_retrieval",
                                    auxiliary=role == "progress_seed" or rounds > 0)
+            if view.solve_map is not None:
+                view.solve_map.assert_fresh()
             runtime.store.put(result.text)
             if result.stop_reason in {"max_tokens", "length"}:
+                if view.policy.typed_actions and role in {"notes", "answer"}:
+                    raise TransportError("truncated typed action")
                 if role == "answer":
                     raise TransportError("truncated workspace patch")
                 return result
+            if view.policy.typed_actions and role in {'notes', 'answer'}:
+                from .worker_actions import parse_action, apply_action
+                if len(result.text) > view.policy.max_patch_chars:
+                    raise TransportError('worker action exceeds size cap')
+                action = parse_action(result.text, role)
+                if action['action'] in {'read', 'find'} and rounds >= runtime.cfg.memory_max_rounds:
+                    raise TransportError('action retrieval allowance exhausted')
+                rebuilt = apply_action(view, action, runtime.store, runtime.cfg.memory_read_chars)
+                if rebuilt is None:
+                    event['retrievals'].append(dict(action))
+                    rounds += 1
+                    continue
+                event['status'] = 'reconstructed-not-yet-accepted' if role == 'answer' else 'returned'
+                return CallResult(rebuilt, result.tokens_before, result.tokens_after, result.stop_reason, result.cost_usd)
             try:
                 obj = strict_json(result.text)
             except (ValueError, TypeError):
@@ -516,6 +576,13 @@ def complete_workspace(runtime, *, role, model, system, template, values,
                 return CallResult(rebuilt, result.tokens_before, result.tokens_after, result.stop_reason, result.cost_usd)
             event["status"] = "returned"
             return result
+    except TransportError as exc:
+        event['status'] = type(exc).__name__
+        runtime.trace.feedback = 'Worker action rejected: ' + str(exc)[:300]
+        if result is not None:
+            from .worker_actions import record_rejection
+            record_rejection(runtime.trace, 'protocol-' + role, str(exc), runtime.cfg.max_repeated_rejections)
+        raise
     except BaseException as exc:
         event["status"] = type(exc).__name__
         raise

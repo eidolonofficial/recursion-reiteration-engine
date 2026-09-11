@@ -90,7 +90,9 @@ class CoreTests(unittest.TestCase):
         result, _ = self.run_case(["note", "answer", score(.2)], validator=broken, oracle_sufficient=False)
         self.assertFalse(result.steps[0].gate_rejected)
         self.assertIn("OSError", result.steps[0].validator_error)
-        self.assertEqual(result.total_calls, 3)
+        self.assertEqual(result.total_calls, 2)
+        self.assertFalse(result.steps[0].progress_accepted)
+        self.assertEqual(result.steps[0].judge_calls, 0)
 
     def test_truthy_validator_is_not_boolean_validation(self):
         result, _ = self.run_case(["note", "answer", score(.1)], validator=lambda a: "False")
@@ -278,7 +280,7 @@ for index, value in enumerate(INVALID_JUDGES):
         self.assertEqual(halting._parse(value), (0.0, halting._UNPARSEABLE))
     setattr(CoreTests, f"test_invalid_judge_{index:02}", check)
 
-INVALID_CONFIGS = [dict(n=0), dict(n=True), dict(n=1.5), dict(T=0), dict(ladder=()),
+INVALID_CONFIGS = [dict(n=-1), dict(n=True), dict(n=1.5), dict(T=0), dict(ladder=()),
                    dict(ladder=(Tier(""),)), dict(ladder=(Tier("local", max_tokens=0),)),
                    dict(judge_votes=0), dict(judge_votes=True), dict(halt_threshold=float("nan")),
                    dict(halt_threshold=0), dict(halt_threshold=2), dict(temperature=float("inf")),

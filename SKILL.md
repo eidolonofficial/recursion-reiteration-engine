@@ -62,3 +62,7 @@ unresolved failures are mandatory; stop on budget overflow rather than hide them
 Stage consolidation only when the host requests it, such as at a completed milestone
 or context pressure. It is a private proposal until a host reviewer applies it.
 Read `references/private-memory.md` for these interfaces and their limits.
+
+Use `--simple` for compatible workers: one typed action, zero preliminary notes
+by default. Keep checker feedback separate. Failed commands are not working notes;
+repeated-rejection state persists across checkpoints.

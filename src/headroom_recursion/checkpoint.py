@@ -28,6 +28,7 @@ def policy(cfg) -> dict:
         "memory_identity": cfg.memory_session.identity if cfg.memory_session else None,
         "observations_enabled": cfg.observation_ledger is not None,
         "n": cfg.n, "T": cfg.T,
+        "max_repeated_rejections": cfg.max_repeated_rejections,
         "ladder": [[t.model, t.max_steps, t.max_tokens, t.step_timeout_s] for t in cfg.ladder],
         "judge_model": cfg.judge_model or (cfg.ladder[-1].model if cfg.enforce_progress else None),
         "judge_votes": cfg.judge_votes, "halt_threshold": cfg.halt_threshold,
@@ -38,6 +39,7 @@ def policy(cfg) -> dict:
         "verification_id": cfg.verification_id,
         "progress_seed_mode": cfg.progress_seed_mode,
         "reuse_exact_judgments": cfg.reuse_exact_judgments,
+        "compact_json_transport": cfg.compact_json_transport,
         "checks": [[c.name, c.statement, c.required] for c in cfg.progress_checks],
         "validator_present": cfg.validator is not None, "oracle_sufficient": cfg.oracle_sufficient,
         "oracle_note": cfg.oracle_note, "oracle_rung": cfg.oracle_rung,
@@ -94,7 +96,8 @@ def load(path: str | Path, *, max_bytes: int = 64_000_000) -> dict:
 def validate(payload: dict, cfg, problem: str) -> None:
     required = {"scope", "problem_hash", "policy_hash", "attempted_calls", "successful_calls",
                 "wall_seconds", "next_tier", "completed_steps", "incumbent", "current",
-                "locked_checks", "archive", "input_before", "input_after", "auxiliary_tokens"}
+                "locked_checks", "archive", "input_before", "input_after", "auxiliary_tokens",
+                "rejection_counts", "feedback"}
     if not isinstance(payload, dict) or set(payload) != required:
         raise ValueError("unexpected checkpoint fields")
     if payload["scope"] != cfg.memory_scope or payload["problem_hash"] != digest(problem):
@@ -123,6 +126,12 @@ def validate(payload: dict, cfg, problem: str) -> None:
             raise ValueError("invalid checkpoint answer/notes pair")
         if state["model"] and state["model"] not in {t.model for t in cfg.ladder} | {"seed"}:
             raise ValueError("checkpoint model is outside the approved ladder")
+    counts = payload["rejection_counts"]
+    if (type(counts) is not dict or len(counts) > 64 or
+            any(type(k) is not str or len(k) != 64 or
+                type(v) is not int or not 1 <= v <= payload['attempted_calls'] for k, v in counts.items())
+            or type(payload['feedback']) is not str or len(payload['feedback']) > 4000):
+        raise ValueError("invalid rejection history or feedback")
     locked = payload["locked_checks"]
     if (not isinstance(locked, list) or any(not isinstance(v, str) for v in locked) or
             len(locked) != len(set(locked)) or not set(locked) <= {c.name for c in cfg.progress_checks}):

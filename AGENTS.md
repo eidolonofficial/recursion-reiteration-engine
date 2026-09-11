@@ -49,3 +49,7 @@ model call; reject concurrent changes. Selection and staged consolidation are no
 verification. Exact observation pins belong in seed and candidate judgments and
 in judgment-cache keys. Run private-memory and context-mechanism tests with the
 full suite. Do not publish database files, jobs, transcripts or local model state.
+
+Use `--simple` for compatible workers: one typed action, zero preliminary notes
+by default. Keep checker feedback separate. Failed commands are not working notes;
+repeated-rejection state persists across checkpoints.

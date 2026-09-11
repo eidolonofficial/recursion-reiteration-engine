@@ -1,5 +1,14 @@
 # Recursion Reiteration Engine
 
+## v0.7.0: one checked worker action
+
+Use `RecurseConfig.simple(...)` or `--simple` for one typed proposal per step.
+Python resolves offered blocks, checks results and carries exact feedback.
+Malformed commands never become notes; repeated failures stop after two attempts
+by default, including across resume. No runtime dependencies or models were added.
+The previously tested symbolic view is retained. See `references/worker-actions.md`
+and `TESTING.md` for the exact interface and the failed-but-bounded Gemma trial.
+
 ## v0.6.1: private memory integration
 
 Continues verified base `690fcbe535a8c02850992e5ba8bd66e84a7a02d3` without

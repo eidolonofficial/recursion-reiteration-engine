@@ -40,6 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", dest="as_json")
     parser.add_argument("--profile", choices=("coding", "research"), help="explicit bounded work profile, not a model selector")
     parser.add_argument("--rungs", type=int, help="repeat the one supplied ladder model; no independent-model claim")
+    parser.add_argument("--solve-map", action="store_true", help="measured ASCII/JSON solve-memory view")
     parser.add_argument("--archive-search", action="store_true", help="offered-source literal find in compact workspace")
     parser.add_argument("--memory-db", type=Path, help="host-owned persistent MTM; not an authority database")
     parser.add_argument("--memory-user")
@@ -49,6 +50,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--memory-writer-model")
     parser.add_argument("--memory-k", type=int, default=5)
     parser.add_argument("--memory-capacity", type=int, default=10000)
+    parser.add_argument("--simple", action="store_true", help="one typed proposal per step; Python checks results")
     parser.add_argument("--efficient", action="store_true", help="compact workspace-v2, local progress carry-forward, exact single-judge reuse")
     parser.add_argument("--no-compression", action="store_true")
     parser.add_argument("--compression-backend", choices=("local", "headroom"), default="local")
@@ -87,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
             if type(args.rungs) is not int or not 1 <= args.rungs <= 1000 or len(models) != 1:
                 raise ValueError("--rungs requires one model and 1..1000 rungs")
             models = models * args.rungs
-        n = args.n if args.n is not None else (1 if args.profile == "coding" else 2 if args.profile == "research" else 6)
+        n = args.n if args.n is not None else (0 if args.simple else 1 if args.profile == "coding" else 2 if args.profile == "research" else 6)
         steps = args.steps if args.steps is not None else (1 if args.profile else 3)
         cfg = RecurseConfig(n=n, T=steps,
                             ladder=tuple(Tier(model.strip(), max_tokens=args.max_tokens) for model in models),
@@ -105,17 +107,20 @@ def main(argv: list[str] | None = None) -> int:
                             pinned_notes=tuple(read_text(path) for path in args.pin_file),
                             checkpoint_path=args.checkpoint, resume_from=args.resume,
                             verification_id=args.verification_id)
-        if args.efficient or args.profile or args.memory_db or args.archive_search:
+        if args.solve_map and not args.memory_db:
+            raise ValueError("--solve-map requires --memory-db and its explicit user/project scope")
+        if args.simple or args.efficient or args.profile or args.memory_db or args.archive_search:
             if args.no_compression or args.compress_judge_notes:
                 raise ValueError("--efficient conflicts with --no-compression/--compress-judge-notes")
             cfg.workspace = WorkspacePolicy(budget=args.workspace_tokens or 4096, compact=True,
-                                            chunk_chars=768, max_optional_chunks=6)
+                                            chunk_chars=768, max_optional_chunks=6, typed_actions=args.simple)
             cfg.progress_seed_mode = "local"
             cfg.reuse_exact_judgments = True
+            cfg.compact_json_transport = True
             if args.profile or args.archive_search or args.memory_db:
                 from dataclasses import replace
-                cfg.workspace = replace(cfg.workspace, enable_search=True)
-        if args.profile:
+                cfg.workspace = replace(cfg.workspace, enable_search=True, solve_map=args.solve_map)
+        if args.profile or args.simple:
             cfg.judge_can_halt = args.profile != "research"
             if cfg.max_total_calls is None:
                 cfg.max_total_calls = 2 + len(models) * steps * (3 * (n + 1) + 5)

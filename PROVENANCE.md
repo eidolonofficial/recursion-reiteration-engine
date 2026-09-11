@@ -173,3 +173,11 @@ quality-preserving compression. Existing license bytes and Git history remain.
 The recovered draft was published as v0.6.0 while this hardening was being
 qualified. The finishing changes are v0.6.1, a normal descendant that preserves
 that release and its assets rather than moving the existing tag.
+
+## Worker boundary completion
+
+v0.7.0 preserves the previously tested symbolic work and adds a strict one-action
+worker interface, host-owned checker feedback, durable bounded rejection tracking,
+and a finite Python arithmetic example. No new model weights or learned compressor
+are introduced. The existing license notices remain outside runtime prompts.
+The failed local-model trial and its bounded termination are documented in TESTING.md.

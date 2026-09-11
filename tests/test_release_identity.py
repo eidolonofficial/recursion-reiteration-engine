@@ -23,7 +23,7 @@ class ReleaseIdentityTests(unittest.TestCase):
     def test_distribution_name_and_version(self):
         text = (ROOT / 'pyproject.toml').read_text(encoding='utf-8')
         self.assertIn('name = "' + SLUG + '"', text)
-        self.assertIn('version = "0.6.1"', text)
+        self.assertIn('version = "0.7.0"', text)
         self.assertIn('dependencies = []', text)
 
     def test_new_and_compatible_commands(self):

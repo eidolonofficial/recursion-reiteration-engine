@@ -1,4 +1,35 @@
-# Verification: v0.6.1
+# Verification: v0.7.0 worker actions
+
+455 tests passed on Windows Python 3.14.4 after the worker change: the inherited
+432 methods plus 19 worker-contract methods and four finite-selection methods.
+The source remained dependency-free. Final checkout/build/publication checks are
+recorded in the release receipt. No Linux or Lean/Mathlib run is claimed here.
+
+The full-suite first pass exposed two intentionally changed expectations (zero
+note calls are now supported; an unavailable checker does not fall back to model
+approval), and four original Lean files converted by the new Windows checkout.
+Those exact source files were restored, not edited. The previous published tree,
+original symbolic worktree, and license text were preserved.
+
+The same installed Gemma 3 4B Q4_K_M was rerun on the same twelve-project task,
+with 8192 context tokens and one prediction slot. The new worker made two fresh
+calls, reporting 1,977 total backend tokens. Both outputs were malformed typed
+replies (Markdown fences, and incorrect candidate formatting); neither was repaired
+or admitted. The controller stopped with `repeated-rejection`, zero note calls,
+empty working notes and no accepted answer. No reference solution or target value
+was supplied to the model. CLI ANSI and outer whitespace were removed only.
+
+The old ladder used ten calls and 13,365 backend tokens, but both trials failed.
+This comparison demonstrates the bounded failure path, NOT better solve quality,
+successful-task token savings or a controlled latency benchmark. The fixed Python
+checker separately enumerated all 4,096 selections, found 99 feasible cases, and
+confirmed optimum 67. That optimum is host computation, not a model discovery.
+The CLI uses its existing sampling defaults; per-request temperature and output
+limits are not enforced by this particular local test adapter.
+
+---
+
+# Historical verification: v0.6.1
 
 ## Current qualification
 
