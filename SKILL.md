@@ -1,9 +1,9 @@
 ---
-name: recursive-reiteration-engine
+name: recursion-reiteration-engine
 description: Refine candidates through bounded working context, progress-preserving iteration, and externally verified experiments. Use for local model-neutral research, checked revisions, and evidence-gated promotion without a hosted inference service.
 ---
 
-# Recursive Reiteration Engine
+# Recursion Reiteration Engine
 
 Use this protocol when a task benefits from iterative correction rather than a
 single attempt. It can run inside the current host conversation or through the
@@ -33,7 +33,7 @@ Do not infer credentials, activate remote services, install dependencies, or exe
 a newly generated checker without explicit operator review. The lean/ directory
 is an optional preserved project; its toolchain is not bundled.
 
-The skill and distribution are named `recursive-reiteration-engine`. The Python
+The skill and distribution are named `recursion-reiteration-engine`. The Python
 namespace `headroom_recursion` is retained for existing integrations.
 For runnable examples and tested interfaces, read README.md and TESTING.md.
 

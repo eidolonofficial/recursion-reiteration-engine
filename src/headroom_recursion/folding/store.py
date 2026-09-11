@@ -23,26 +23,30 @@ class Store:
             raise FoldError("store database may not be a symlink")
         self.max_blob_bytes = max_blob_bytes
         self.db = sqlite3.connect(self.path, timeout=10, isolation_level=None)
-        os.chmod(self.path, 0o600)
-        self.db.execute("PRAGMA foreign_keys=ON")
-        self.db.execute("PRAGMA synchronous=FULL")
-        self.db.executescript('''
-          CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
-          CREATE TABLE IF NOT EXISTS blobs(ref TEXT PRIMARY KEY,body BLOB NOT NULL);
-          CREATE TABLE IF NOT EXISTS campaigns(scope TEXT PRIMARY KEY,head TEXT NOT NULL REFERENCES blobs(ref));
-          CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY,scope TEXT NOT NULL,
-            previous TEXT NOT NULL,state TEXT NOT NULL REFERENCES blobs(ref),
-            detail TEXT NOT NULL REFERENCES blobs(ref),chain TEXT NOT NULL);
-          CREATE TABLE IF NOT EXISTS units(ref TEXT NOT NULL,scope TEXT NOT NULL,phase TEXT NOT NULL,
-            PRIMARY KEY(ref,scope,phase));
-        ''')
-        with self.transaction():
-            v = self.db.execute("SELECT value FROM metadata WHERE key='schema'").fetchone()
-            if v is None:
-                self.db.execute("INSERT INTO metadata VALUES('schema','1')")
-            elif v[0] != '1':
-                raise FoldError("unsupported store schema")
-        self.audit()
+        try:
+            os.chmod(self.path, 0o600)
+            self.db.execute("PRAGMA foreign_keys=ON")
+            self.db.execute("PRAGMA synchronous=FULL")
+            self.db.executescript('''
+              CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
+              CREATE TABLE IF NOT EXISTS blobs(ref TEXT PRIMARY KEY,body BLOB NOT NULL);
+              CREATE TABLE IF NOT EXISTS campaigns(scope TEXT PRIMARY KEY,head TEXT NOT NULL REFERENCES blobs(ref));
+              CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY,scope TEXT NOT NULL,
+                previous TEXT NOT NULL,state TEXT NOT NULL REFERENCES blobs(ref),
+                detail TEXT NOT NULL REFERENCES blobs(ref),chain TEXT NOT NULL);
+              CREATE TABLE IF NOT EXISTS units(ref TEXT NOT NULL,scope TEXT NOT NULL,phase TEXT NOT NULL,
+                PRIMARY KEY(ref,scope,phase));
+            ''')
+            with self.transaction():
+                v = self.db.execute("SELECT value FROM metadata WHERE key='schema'").fetchone()
+                if v is None:
+                    self.db.execute("INSERT INTO metadata VALUES('schema','1')")
+                elif v[0] != '1':
+                    raise FoldError("unsupported store schema")
+            self.audit()
+        except BaseException:
+            self.db.close()
+            raise
 
     def close(self):
         self.db.close()

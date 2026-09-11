@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "recursive-reiteration-engine"
+name = "recursion-reiteration-engine"
 version = "0.4.1"
 description = "Local, model-neutral recursive refinement with explicit verification boundaries"
 readme = "README.md"
@@ -13,7 +13,7 @@ dependencies = []
 
 [project.scripts]
 reiterate = "headroom_recursion.cli:main"
-recursive-reiteration-engine = "headroom_recursion.cli:main"
+recursion-reiteration-engine = "headroom_recursion.cli:main"
 recurse = "headroom_recursion.cli:main"
 
 [project.urls]

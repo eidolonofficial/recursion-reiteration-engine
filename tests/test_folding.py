@@ -184,8 +184,21 @@ class FoldingTests(unittest.TestCase):
         self.store.db.execute('DELETE FROM units WHERE phase=?',('holdout',))
         with self.assertRaises(FoldError):self.store.audit()
     def test_unsupported_store_schema(self):
+        import sqlite3
+        from unittest.mock import patch
         self.store.db.execute("UPDATE metadata SET value='99' WHERE key='schema'")
-        with self.assertRaises(FoldError):Store(Path(self.tmp.name)/'db')
+        opened = []
+        connect = sqlite3.connect
+        def tracked_connect(*args, **kwargs):
+            connection = connect(*args, **kwargs)
+            opened.append(connection)
+            return connection
+        with patch('headroom_recursion.folding.store.sqlite3.connect', side_effect=tracked_connect):
+            with self.assertRaises(FoldError):
+                Store(Path(self.tmp.name)/'db')
+        self.assertEqual(len(opened), 1)
+        with self.assertRaises(sqlite3.ProgrammingError):
+            opened[0].execute('SELECT 1')
     def test_composition_requires_all_four_arms(self):
         a=self.candidate(.3,'A');b=self.candidate(.4,'B');self.stage(a,'screen');self.stage(b,'screen')
         c=self.candidate(0,'AB',components=(a,b))

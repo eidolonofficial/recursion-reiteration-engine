@@ -1,4 +1,20 @@
-# Executed validation — Recursive Reiteration Engine v0.4.1
+# Publication verification: 2026-09-11
+
+The published skill and distribution name is `recursion-reiteration-engine`.
+During publication qualification, the original 271-test suite passed on Linux.
+Running the same suite on Windows exposed two portability defects: failed store
+initialization retained a SQLite handle, and a source-inspection test used the
+platform encoding instead of UTF-8. The store now closes its connection on any
+initialization failure; the strengthened regression checks closure directly.
+The source-inspection test now reads UTF-8 explicitly.
+
+The preparation record below describes the earlier snapshot. Its unchanged-module
+statement does not include this publication correction to `folding/store.py`.
+The publication receipt records the final Linux and Windows test results.
+
+## Earlier standalone preparation record
+
+# Executed validation — Recursion Reiteration Engine v0.4.1
 
 The standalone rename retains the runtime; it does not rerun the mathematical
 research campaigns or claim new model results. On Python 3.13.5, all **271

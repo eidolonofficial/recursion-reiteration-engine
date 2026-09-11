@@ -1,4 +1,4 @@
-# Publish a new Recursive Reiteration Engine repository
+# Publish a new Recursion Reiteration Engine repository
 
 Target: `eidolonofficial/recursion-reiteration-engine`.
 
@@ -51,7 +51,7 @@ databases, live traces, experiment data, and research corpora are not release in
 ## Recreate the prepared local repository
 
 ```sh
-git clone recursive-reiteration-engine.bundle recursive-reiteration-engine
+git clone recursion-reiteration-engine.bundle recursion-reiteration-engine
 ```
 
 The bundle contains only the standalone `main` root. The ZIP contains the same

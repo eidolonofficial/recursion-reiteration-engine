@@ -8,8 +8,8 @@ import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-SLUG = 'recursive-reiteration-engine'
-TARGET = 'eidolonofficial/recursion-reiteration-engine'
+SLUG = 'recursion-reiteration-engine'
+TARGET = 'eidolonofficial/' + SLUG
 
 
 class ReleaseIdentityTests(unittest.TestCase):
@@ -18,7 +18,7 @@ class ReleaseIdentityTests(unittest.TestCase):
         self.assertTrue(text.startswith('---\n'))
         metadata = text.split('---', 2)[1]
         self.assertIn('name: ' + SLUG, metadata.splitlines())
-        self.assertIn('# Recursive Reiteration Engine\n', text)
+        self.assertIn('# Recursion Reiteration Engine\n', text)
 
     def test_distribution_name_and_version(self):
         text = (ROOT / 'pyproject.toml').read_text(encoding='utf-8')

@@ -108,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
             checked(['git', 'config', 'user.email', identity(root, 'user.email', 'clean-export@localhost')], cwd=staged)
             checked(['git', 'add', '--all'], cwd=staged)
             checked(['git', '-c', 'commit.gpgsign=false', 'commit', '-m',
-                     'Initial Recursive Reiteration Engine release'], cwd=staged)
+                     'Initial Recursion Reiteration Engine release'], cwd=staged)
             checked(['gh', 'repo', 'create', TARGET, '--' + visibility,
                      '--source', str(staged), '--remote', 'origin', '--push',
                      '--description', 'Model-neutral recursive refinement, bounded working context, and evidence-gated promotion'],

@@ -1,4 +1,4 @@
-# Recursive Reiteration Engine
+# Recursion Reiteration Engine
 
 **Refine an answer without discarding the work that got it there.**
 
@@ -19,12 +19,12 @@ exchange. Model identifiers and their order belong to the operator.
 This is a fresh-history derivative of `gmrmk/headroom-recursion`, prepared for
 `eidolonofficial`, not an independently authored clean-room reproduction.
 [Provenance](PROVENANCE.md) identifies the source and scope. The skill and Python
-distribution are named `recursive-reiteration-engine`; the established
+distribution are named `recursion-reiteration-engine`; the established
 `headroom_recursion` import namespace and `recurse` command remain compatible.
 
 ## Use as an agent skill
 
-Keep this repository in a directory named `recursive-reiteration-engine` inside
+Keep this repository in a directory named `recursion-reiteration-engine` inside
 your agent's supported skill location, or point the agent directly to `SKILL.md`.
 The front matter declares the exact skill name. Follow `AGENTS.md` for development.
 The prose skill supplies a workflow; use the Python controller for mechanical
@@ -86,7 +86,7 @@ a revision that loses a checked condition. The rational example runs an exact
 Newton iteration through a real subprocess. **Neither is a neural-model benchmark.**
 
 An optional offline installation provides `reiterate` and
-`recursive-reiteration-engine` (plus the compatible `recurse` command); setuptools must already be
+`recursion-reiteration-engine` (plus the compatible `recurse` command); setuptools must already be
 available as build tooling:
 
 ```sh

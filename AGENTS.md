@@ -1,4 +1,4 @@
-# Recursive Reiteration Engine: instructions for coding agents
+# Recursion Reiteration Engine: instructions for coding agents
 
 This project is model-neutral. Use the execution environment supplied by the
 operator; do not infer a provider, select a remote service, or download a model.
@@ -69,8 +69,7 @@ Run the folding example and all folding adversarial tests after authority edits.
 
 ## Release identity
 
-Keep `recursive-reiteration-engine` as the skill and distribution name. The
-repository is `eidolonofficial/recursion-reiteration-engine`. Preserve the
-`headroom_recursion` Python namespace and `recurse` entry point
+Keep `recursion-reiteration-engine` as the skill, distribution, and repository
+name. Preserve the `headroom_recursion` Python namespace and `recurse` entry point
 for compatibility; `reiterate` is the preferred command. Do not rename an upstream
 repository or import its history when preparing the standalone release.

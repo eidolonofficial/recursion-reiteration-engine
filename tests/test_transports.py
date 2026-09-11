@@ -136,7 +136,7 @@ class TransportTests(unittest.TestCase):
     def test_runtime_has_no_network_client_imports(self):
         forbidden = {"requests", "httpx", "aiohttp", "urllib", "http", "socket"}
         for path in (ROOT / "src").rglob("*.py"):
-            tree = ast.parse(path.read_text())
+            tree = ast.parse(path.read_text(encoding="utf-8"))
             names = []
             for node in ast.walk(tree):
                 if isinstance(node, ast.Import):
