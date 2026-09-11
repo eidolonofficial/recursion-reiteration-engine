@@ -1,5 +1,32 @@
 # Recursion Reiteration Engine
 
+## v0.6.0: private memory integration
+
+Continues verified base `690fcbe535a8c02850992e5ba8bd66e84a7a02d3` without
+rewriting history. Private user/project records retain exact sources, versions,
+negations, declared dependencies and host pins. Controller, selector and writer
+roles are separate; optional models use the same metered completion boundary.
+The built-in ranker is lexical, not neural or vector retrieval.
+
+Enable the compact searchable transport with `--archive-search`. Persistent
+memory additionally requires `--memory-db PATH --memory-user USER
+--memory-project PROJECT --verification-id REVIEWED-VERSION`. A dry run does not
+create the database. `--profile coding` and `--profile research` choose explicit
+bounded schedules, not models; `--rungs 100` repeats only the one supplied model.
+
+The Python API exposes `MemorySession`, `ObservationLedger`, private staged
+consolidation and exact dependency-scoped `ReviewGraph` receipts. Full-candidate
+judging remains the default. Host admissions and finite receipts do not settle
+universal claims. No weights, shared graph, automatic backend activation, hidden
+child agents or runtime KV cache are included. Existing optional compressor
+hooks remain explicit host integrations, not newly benchmarked features.
+
+See [the private-memory contract](references/private-memory.md), run
+`PYTHONPATH=src python -B -S examples/private_memory_demo.py`, and read
+[the current testing scope](TESTING.md). Historical v0.5 token comparisons below
+are not measurements of v0.6 neural task quality or automatic host-transcript savings.
+
+
 A local, model-neutral controller for iterative refinement. It keeps exact evidence
 outside the working prompt, carries checked progress between tiers, and admits
 experimental improvements through an external evaluation workflow.

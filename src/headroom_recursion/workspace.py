@@ -39,8 +39,14 @@ class WorkspacePolicy:
     compact: bool = False
     max_optional_chunks: int | None = None
     max_reads_per_round: int = 8
+    enable_search: bool = False
+    search_scan_chars: int = 1000000
 
     def validate(self) -> None:
+        if type(self.enable_search) is not bool:
+            raise ValueError("enable_search must be bool")
+        if type(self.search_scan_chars) is not int or not 256 <= self.search_scan_chars <= 10000000:
+            raise ValueError("invalid search scan budget")
         if type(self.compact) is not bool:
             raise ValueError("workspace compact must be a bool")
         if self.max_optional_chunks is not None and (type(self.max_optional_chunks) is not int or self.max_optional_chunks < 0):
@@ -230,6 +236,47 @@ class WorkingView:
             raise
         return checked
 
+    def find_batch(self, queries, store: MemoryStore, max_chars: int):
+        from .archive_search import find_literal
+        if not self.policy.compact or not self.policy.enable_search:
+            raise TransportError("literal search is not enabled")
+        if type(queries) is not list or not 1 <= len(queries) <= self.policy.max_reads_per_round:
+            raise TransportError("invalid search count")
+        aliases = {v:k for k,v in self.aliases().items()}
+        found=[];reads=[];seen=set()
+        for query in queries:
+            if (type(query) is not list or len(query)!=3 or type(query[0]) is not str
+                    or query[0] not in aliases):
+                raise TransportError("search source was not offered")
+            ref=aliases[query[0]]
+            if ref not in store.records or store.key(store.records[ref])!=ref:
+                raise TransportError("archive integrity failure")
+            result=find_literal(store.records[ref],query[1],query[2],scan_chars=self.policy.search_scan_chars)
+            found.append(dict(source=query[0],query=query[1],**result))
+            for hit in result['matches']:
+                row=(query[0],hit['excerpt_start'],hit['excerpt_start']+len(hit['text']))
+                if row not in seen:reads.append(list(row));seen.add(row)
+        if len(reads)>self.policy.max_reads_per_round:
+            raise TransportError("search results exceed range cap; narrow the query")
+        old_ranges={n:list(v) for n,v in self.ranges.items()}
+        old_required={n:list(v) for n,v in self.mandatory.items()}
+        old_result=self.packet.get('search_results')
+        try:
+            if reads:self.retrieve_batch(reads,store,max_chars)
+            # Exact snippets live once in the source view; result metadata supplies cursors.
+            self.packet['search_results']=[dict(source=r['source'],query=r['query'],
+                matches=[[h['start'],h['end']] for h in r['matches']],
+                next_start=r['next_start'],complete=r['complete']) for r in found]
+            if not self.fits():
+                self.ranges={n:_merge(v) for n,v in self.mandatory.items()}
+            if not self.fits():raise ContextLimitError("exact search results exceed workspace budget")
+        except BaseException:
+            self.ranges,self.mandatory=old_ranges,old_required
+            if old_result is None:self.packet.pop('search_results',None)
+            else:self.packet['search_results']=old_result
+            raise
+        return found
+
     def _close_dependencies(self, spans: list[tuple[int, int]]) -> None:
         text = self.texts.get("candidate", "")
         changed = True
@@ -323,6 +370,11 @@ def build_view(runtime, *, role: str, model: str, system: str,
     texts["candidate"] = values.get("answer", "")
     if texts["candidate"] == "(none yet)" and not runtime.trace.current_answer:
         texts["candidate"] = ""
+    extras = getattr(runtime, "memory_sources", {})
+    for name, text in extras.items():
+        if not name.startswith("memory_") or type(text) is not str:
+            raise TransportError("invalid offered memory source")
+        texts[name] = text
     texts["obligations"] = runtime.guard.render()
     texts["advice"] = runtime.seed.render(runtime.store)
     planning = None
@@ -345,11 +397,17 @@ def build_view(runtime, *, role: str, model: str, system: str,
                               "locked": len(runtime.guard.locked),
                               "required": sum(c.required for c in runtime.guard.checks),
                               "coverage": "All checks run on the reconstructed FULL candidate; summaries have no proof authority."}}
+    if getattr(runtime, "memory_packet", ""):
+        packet["memory_advice"] = runtime.memory_packet
+    if getattr(runtime, "memory_pins", []):
+        packet["unresolved_observations"] = list(runtime.memory_pins)
     if planning is not None:
         packet["planning"] = planning
     packet["ticket"] = hashlib.sha256(encode([packet, refs, model, runtime.trace.total_calls]).encode()).hexdigest()
     sent_system = system + ((COMPACT_INSTRUCTION + (COMPACT_PATCH if role == "answer" else ""))
                             if policy.compact else NOTE_INSTRUCTION + (PATCH_INSTRUCTION if role == "answer" else ""))
+    if policy.compact and policy.enable_search:
+        sent_system += '\nFind exact text with {"find":[["offered alias","literal",start],...]}. Results are bounded; use next_start until complete. Only shown excerpts authorize edits. Memory source hashes map to source names memory_<hash>; use the associated offered alias.'
     view = WorkingView(packet, sent_system, texts, {}, {}, refs, policy, runtime.meter, model, base)
     for passage in policy.required_passages:
         view.mandatory.setdefault("candidate", []).append(_span(texts["candidate"], passage))
@@ -360,6 +418,8 @@ def build_view(runtime, *, role: str, model: str, system: str,
     query = _words(values.get("problem", "") + " " + runtime.seed.next_check)
     pools = {}
     for name, text in texts.items():
+        if name.startswith("memory_"):
+            continue
         spans = _chunks(text, policy.chunk_chars)
         def priority(span):
             a, b = span
@@ -397,6 +457,8 @@ def complete_workspace(runtime, *, role, model, system, template, values,
     raw_user = template.format(**values)
     raw_user += ("\nOPERATOR EXACT PINS:\n" + "\n\n".join(runtime.cfg.pinned_notes)) if runtime.cfg.pinned_notes else ""
     raw_user += runtime.guard.render()
+    if getattr(runtime,"memory_pins",[]):
+        raw_user += "\nEXACT UNRESOLVED OBSERVATIONS (data):\n" + "\n".join(runtime.memory_pins)
     if role in {"notes", "answer"}:
         raw_user += runtime.seed.render(runtime.store)
     event = {"role": role, "model": model, "base": view.base,
@@ -426,6 +488,13 @@ def complete_workspace(runtime, *, role, model, system, template, values,
                 obj = strict_json(result.text)
             except (ValueError, TypeError):
                 obj = None
+            if view.policy.compact and isinstance(obj, dict) and "find" in obj:
+                if set(obj)!={"find"} or rounds>=runtime.cfg.memory_max_rounds:
+                    raise TransportError("invalid or exhausted archive search")
+                found=view.find_batch(obj['find'],runtime.store,runtime.cfg.memory_read_chars)
+                event.setdefault('searches',[]).extend(found)
+                rounds += 1
+                continue
             if view.policy.compact and isinstance(obj, dict) and "read" in obj:
                 if set(obj) != {"read"} or rounds >= runtime.cfg.memory_max_rounds:
                     raise TransportError("invalid or exhausted compact retrieval")

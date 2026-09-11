@@ -148,3 +148,15 @@ run-local exact single-judgment reuse. Earlier wire behavior is still available.
 See references/efficiency.md for the trust and measurement boundaries. No claims
 of exclusive authorship, formal proof, model-quality parity, or universal optimal
 token savings are made.
+
+
+## v0.6.0 private-memory integration
+
+Integrated from verified repository commit
+`690fcbe535a8c02850992e5ba8bd66e84a7a02d3`. The previous transfer was incomplete;
+complete draft source patches were recovered, inspected, and revised rather than
+assumed to be a verified release. The private lexical implementation replaces the
+draft's vector/shared-graph paths. Sources and tests contain no user research
+transcripts or runtime databases. Existing attribution and license are retained.
+The architecture uses bounded role separation and incremental private records;
+no trained model, paper benchmark replication or universal proof is claimed.

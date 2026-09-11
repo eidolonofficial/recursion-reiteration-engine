@@ -69,6 +69,27 @@ class ResearchBridge:
         except Exception:
             return False
 
+    def admit_checked(self, current: str, refs: tuple[str, ...], *, progress_checks=()):
+        """Host-only exact record ingestion; zero model review, zero proof promotion.
+
+        The unchanged history and every old/new admission are checked against the
+        trusted registry. This is not a substitute for generative research or a
+        whole-proof review. Scope is intentionally present in the return value.
+        """
+        prior=self.parse(current)
+        if type(refs) is not tuple or any(type(r) is not str for r in refs) or len(set(refs))!=len(refs):
+            raise FoldError("admission IDs must be unique")
+        if set(refs)&set(prior):
+            raise FoldError("admission already present")
+        updated=self.render(prior+refs)
+        self.parse(updated)
+        for check in progress_checks:
+            if check.check(updated) is not True:
+                raise FoldError("external progress check rejected exact admission")
+        return {"answer":updated,"answer_hash":sha(updated.encode()),"added":list(refs),
+                "coverage":"exact issued records and unchanged history only",
+                "whole_proof_reviewed":False,"settles_target":False,"model_calls":0}
+
     def bind(self, cfg: RecurseConfig, *, workspace_budget: int = 4096) -> RecurseConfig:
         checks=(ProgressCheck("fold-envelope-"+self.policy_id[:16],
                      "Preserve the exact archived history and admit only externally checked folding records; no model promotion.",
@@ -82,5 +103,7 @@ class ResearchBridge:
                        enforce_progress=True,compress_judge=False,judge_can_halt=False,
                        # Finite results or empirical promotions never settle the grand target.
                        oracle_sufficient=False,
+                       # Confirmation-bearing admissions must not seed future generation memory.
+                       memory_auto_write=False,
                        verification_id=cfg.verification_id+"/fold-"+self.policy_id,
                        memory_scope=self.folding.scope)

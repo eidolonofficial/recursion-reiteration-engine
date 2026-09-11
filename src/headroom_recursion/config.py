@@ -85,6 +85,9 @@ class RecurseConfig:
     pinned_notes: tuple[str, ...] = ()
     # Opt-in bounded archive/delta protocol; None preserves the v0.2 wire format.
     workspace: Any = None
+    memory_auto_write: bool = True
+    memory_session: Any = None  # host-bound optional user/project memory pipeline
+    observation_ledger: Any = None  # host-recorded tool observations, never worker statuses
     memory_scope: str = "local"
     memory_max_bytes: int = 16_000_000
     memory_max_rounds: int = 2
@@ -138,6 +141,29 @@ class RecurseConfig:
         values.update(overrides)
         return cls(**values)
 
+    @classmethod
+    def for_workload(cls, workload: str, *, model="local", rungs=1, budget=4096, **overrides):
+        """Explicit lighter schedules for interactive coding or evidence-led research.
+
+        Rungs are budget ceilings, not independent models or discoveries. This
+        opt-in helper does not alter the legacy constructor's recurrence.
+        """
+        if workload not in {"coding", "research"}:
+            raise ValueError("workload must be coding or research")
+        _integer("rungs", rungs)
+        if rungs > 1000 or not isinstance(model,str) or not model.strip():
+            raise ValueError("nonempty model and at most 1000 rungs required")
+        from .workspace import WorkspacePolicy
+        n=1 if workload=="coding" else 2
+        values=dict(n=n,T=1,ladder=tuple(Tier(model,max_steps=1) for _ in range(rungs)),
+                    max_total_calls=2+rungs*(3*(n+1)+2),judge_can_halt=workload!="research",
+                    workspace=WorkspacePolicy(budget=budget,compact=True,enable_search=True,
+                        chunk_chars=768,max_optional_chunks=6))
+        values.update(overrides)
+        cfg=cls.efficient(budget=budget,**values)
+        cfg.validate()
+        return cfg
+
     def steps_for(self, tier: Tier) -> int:
         return tier.max_steps if tier.max_steps is not None else self.T
 
@@ -173,7 +199,7 @@ class RecurseConfig:
         for name in ("seed_answer", "seed_scratchpad", "oracle_note"):
             if not isinstance(getattr(self, name), str):
                 raise TypeError(f"{name} must be a string")
-        for name in ("use_headroom", "compress_judge", "oracle_sufficient", "claim_audit", "oracle_auto", "enforce_progress", "preseed_ladder", "judge_can_halt"):
+        for name in ("use_headroom", "compress_judge", "oracle_sufficient", "claim_audit", "oracle_auto", "enforce_progress", "preseed_ladder", "judge_can_halt", "memory_auto_write"):
             if type(getattr(self, name)) is not bool:
                 raise TypeError(f"{name} must be a bool")
         if self.workspace is not None:
@@ -183,6 +209,20 @@ class RecurseConfig:
             self.workspace.validate()
             if self.compress_judge:
                 raise ValueError("workspace mode requires exact full judge inputs")
+        if self.memory_session is not None:
+            from .memory import MemorySession
+            if not isinstance(self.memory_session, MemorySession):
+                raise TypeError("memory_session must be host-bound MemorySession")
+            if self.workspace is None or not self.workspace.compact or not self.workspace.enable_search:
+                raise ValueError("memory integration requires searchable compact workspace")
+            if not self.verification_id:
+                raise ValueError("memory integration requires explicit verification_id")
+        if self.observation_ledger is not None:
+            from .memory.observations import ObservationLedger
+            if not isinstance(self.observation_ledger, ObservationLedger) or self.memory_session is None:
+                raise ValueError("observations require a host-bound memory session")
+            if self.observation_ledger.principal != self.memory_session.principal or self.observation_ledger.store is not self.memory_session.store:
+                raise ValueError("observation/session principal mismatch")
         if self.validator is not None and not callable(self.validator):
             raise TypeError("validator must be callable")
         if self.feedback is not None and not callable(self.feedback):

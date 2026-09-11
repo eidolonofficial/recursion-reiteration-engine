@@ -63,7 +63,7 @@ def judge(client, *, model: str, problem: str, answer: str, scratchpad: str,
         # and parse retries are NEVER replaced with cached copies.
         key = (model, prompts.HALT_SYSTEM, prompts.HALT_JUDGE, problem, answer,
                scratchpad, max_tokens, tuple(cfg.pinned_notes), client.guard.render(),
-               cfg.verification_id, cfg.judge_can_halt)
+               cfg.verification_id, cfg.judge_can_halt, tuple(getattr(client,"memory_pins",())))
         client.check()
         if key in cache:
             score, reason, origin = cache[key]

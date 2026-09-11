@@ -56,3 +56,15 @@ git clone recursion-reiteration-engine.bundle recursion-reiteration-engine
 
 The bundle contains only the standalone `main` root. The ZIP contains the same
 checked source without `.git`. Both forms can be published with the helper above.
+
+
+## Updating the existing private repository
+
+The create-only helper is not the updater. For an authorized update, inspect all
+existing worktrees first and use a clean branch at the verified parent. Run tests,
+regenerate and verify the reviewed manifest, and stage only its allowlisted files.
+Check repository identity and private visibility through the authenticated API.
+Confirm remote main still equals the verified parent, then fast-forward the tested
+commit and its new version tag without force. Recheck the remote commit/tree and
+visibility independently. Preserve all prior history and unrelated worktrees.
+Never use `--public`, recreate the repository or publish runtime memory files.

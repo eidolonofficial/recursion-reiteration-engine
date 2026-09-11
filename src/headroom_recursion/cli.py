@@ -23,8 +23,8 @@ def main(argv: list[str] | None = None) -> int:
     source.add_argument("--demo", action="store_true", help="run a fixed exact-arithmetic demonstration, not a neural model")
     parser.add_argument("--problem-file", type=Path)
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--n", type=int, default=6)
-    parser.add_argument("--steps", type=int, default=3)
+    parser.add_argument("--n", type=int)
+    parser.add_argument("--steps", type=int)
     parser.add_argument("--ladder", default="local", help="comma-separated opaque model identifiers, in operator-chosen order")
     parser.add_argument("--judge-model")
     parser.add_argument("--judge-votes", type=int, default=1)
@@ -38,6 +38,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--research", action="store_true")
     parser.add_argument("--trace-dir", type=Path)
     parser.add_argument("--json", action="store_true", dest="as_json")
+    parser.add_argument("--profile", choices=("coding", "research"), help="explicit bounded work profile, not a model selector")
+    parser.add_argument("--rungs", type=int, help="repeat the one supplied ladder model; no independent-model claim")
+    parser.add_argument("--archive-search", action="store_true", help="offered-source literal find in compact workspace")
+    parser.add_argument("--memory-db", type=Path, help="host-owned persistent MTM; not an authority database")
+    parser.add_argument("--memory-user")
+    parser.add_argument("--memory-project")
+    parser.add_argument("--memory-controller-model")
+    parser.add_argument("--memory-selector-model")
+    parser.add_argument("--memory-writer-model")
+    parser.add_argument("--memory-k", type=int, default=5)
+    parser.add_argument("--memory-capacity", type=int, default=10000)
     parser.add_argument("--efficient", action="store_true", help="compact workspace-v2, local progress carry-forward, exact single-judge reuse")
     parser.add_argument("--no-compression", action="store_true")
     parser.add_argument("--compression-backend", choices=("local", "headroom"), default="local")
@@ -67,11 +78,18 @@ def main(argv: list[str] | None = None) -> int:
         if len(data) > 1_000_000:
             raise ValueError("input file exceeds 1 MB")
         return data.decode("utf-8")
+    memory_store = None
     try:
         models = args.ladder.split(",")
         if any(not model.strip() for model in models):
             raise ValueError("ladder cannot contain empty identifiers")
-        cfg = RecurseConfig(n=args.n, T=args.steps,
+        if args.rungs is not None:
+            if type(args.rungs) is not int or not 1 <= args.rungs <= 1000 or len(models) != 1:
+                raise ValueError("--rungs requires one model and 1..1000 rungs")
+            models = models * args.rungs
+        n = args.n if args.n is not None else (1 if args.profile == "coding" else 2 if args.profile == "research" else 6)
+        steps = args.steps if args.steps is not None else (1 if args.profile else 3)
+        cfg = RecurseConfig(n=n, T=steps,
                             ladder=tuple(Tier(model.strip(), max_tokens=args.max_tokens) for model in models),
                             judge_model=args.judge_model, judge_votes=args.judge_votes,
                             halt_threshold=args.threshold, max_total_calls=args.max_calls,
@@ -87,13 +105,33 @@ def main(argv: list[str] | None = None) -> int:
                             pinned_notes=tuple(read_text(path) for path in args.pin_file),
                             checkpoint_path=args.checkpoint, resume_from=args.resume,
                             verification_id=args.verification_id)
-        if args.efficient:
+        if args.efficient or args.profile or args.memory_db or args.archive_search:
             if args.no_compression or args.compress_judge_notes:
                 raise ValueError("--efficient conflicts with --no-compression/--compress-judge-notes")
             cfg.workspace = WorkspacePolicy(budget=args.workspace_tokens or 4096, compact=True,
                                             chunk_chars=768, max_optional_chunks=6)
             cfg.progress_seed_mode = "local"
             cfg.reuse_exact_judgments = True
+            if args.profile or args.archive_search or args.memory_db:
+                from dataclasses import replace
+                cfg.workspace = replace(cfg.workspace, enable_search=True)
+        if args.profile:
+            cfg.judge_can_halt = args.profile != "research"
+            if cfg.max_total_calls is None:
+                cfg.max_total_calls = 2 + len(models) * steps * (3 * (n + 1) + 5)
+        if args.memory_db:
+            from .memory import MemoryStore, MemoryPolicy, MemorySession, MemoryModels, Principal
+            if not args.memory_user or not args.memory_project or not args.verification_id:
+                raise ValueError("--memory-db requires explicit --memory-user, --memory-project, and --verification-id")
+            policy = MemoryPolicy(k=args.memory_k, capacity=args.memory_capacity)
+            principal = Principal(args.memory_user,args.memory_project)
+            models = MemoryModels(controller=args.memory_controller_model,selector=args.memory_selector_model,
+                                  writer=args.memory_writer_model)
+            if not args.dry_run:
+                memory_store = MemoryStore(args.memory_db, policy=policy)
+                cfg.memory_session = MemorySession(memory_store, principal, models=models)
+        elif any((args.memory_user,args.memory_project,args.memory_controller_model,args.memory_selector_model,args.memory_writer_model)):
+            raise ValueError("memory options require --memory-db")
         cfg.validate()
         if args.dry_run:
             print(plan_schedule(cfg))
@@ -143,6 +181,9 @@ def main(argv: list[str] | None = None) -> int:
     except (ValueError, TypeError, OSError, UnicodeError, ImportError) as exc:
         print(f"recurse: {exc}", file=sys.stderr)
         return 2
+    finally:
+        if memory_store is not None:
+            memory_store.close()
 
 
 if __name__ == "__main__":

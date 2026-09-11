@@ -40,3 +40,12 @@ Keep LICENSE and provenance in the distribution, outside default model input.
 Exclude credentials, runtime databases, private traces, research archives, and
 weights. Regenerate `EXPORT_MANIFEST.json` after reviewed changes. Never overwrite
 unrelated files, change visibility, force-push, or rename the repository implicitly.
+
+
+Private-memory changes must keep all source access principal-bound and preserve
+whole summaries and declared dependencies. Writer proposals never choose source
+refs, expected heads, pins or authority. Compare offered heads captured before the
+model call; reject concurrent changes. Selection and staged consolidation are not
+verification. Exact observation pins belong in seed and candidate judgments and
+in judgment-cache keys. Run private-memory and context-mechanism tests with the
+full suite. Do not publish database files, jobs, transcripts or local model state.

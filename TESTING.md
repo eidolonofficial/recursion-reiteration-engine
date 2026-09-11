@@ -1,4 +1,47 @@
-# Verification: v0.5.0
+# Verification: v0.6.0
+
+## Current qualification
+
+Executed on Windows Python 3.14.4: **398 tests passed without skips**. All six
+examples passed: private memory, efficiency, workspace, progress memory, rational
+refinement and folding. The private-memory example retained its exact 27,000-
+character successful tool log while rendering a 595-character observation view.
+That is a constructed observation-view measurement, not a total-token or neural
+quality claim. The controller made four completion calls to its deterministic
+worker; no memory model was configured.
+
+Run the complete unittest suite and `examples/private_memory_demo.py` from the
+reviewed tree. The private-memory tests cover scope isolation, source durability,
+version conflicts, atomic rollback, pinned constraints, dependency invalidation,
+role-output forgery, concurrent writer updates, bounded exact deltas, private
+consolidation approval and Windows database cleanup. Context-mechanism tests cover
+literal search pagination and edit authorization, immutable scoped receipts,
+checker mutation, whole-candidate judging, private-store checkpoint binding,
+shared call budgets, exact tool schemas and failure-inclusive paired evaluation.
+A constructed 100-record admission test checks preservation and finite coverage;
+it does not rerun the external P-versus-NP experiments or establish a new proof.
+
+The release receipt records the executed test count and environment, example
+runs, fresh-checkout qualification, manifest checks and private publication state.
+Tests use deterministic workers. No fresh neural-model comparison, trained memory
+model, learned-compressor trial, hidden subagent benchmark, KV-cache performance
+study or Lean/Mathlib rebuild is claimed for this release. Test callbacks are not
+representative held-out task evaluation. Every reported character count is labelled
+as such; historical tokenizer savings below belong to v0.5, not v0.6.
+
+```sh
+PYTHONPATH=src python -B -S -m unittest discover -s tests -v
+PYTHONPATH=src python -B -S examples/private_memory_demo.py
+python -B -S scripts/publish.py
+```
+
+A manifest mismatch after an intentional code edit is expected until the reviewed
+allowlist is regenerated. Unknown mismatches must be investigated, not suppressed.
+The publisher's create-only mode is not used to update the existing private repo.
+
+---
+
+# Historical verification: v0.5.0
 
 ## Executed scope
 

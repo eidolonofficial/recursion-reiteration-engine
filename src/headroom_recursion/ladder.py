@@ -191,6 +191,8 @@ def recurse(problem: str, *, client, config: RecurseConfig | None = None) -> Run
 
     try:
         metered.flush()
+        if cfg.memory_session is not None:
+            metered.memory_context(problem, notes)
         if answer and cfg.enforce_progress:
             # Keep the supplied incumbent available even if scoring is interrupted,
             # but never treat it as a scored/verified baseline without doing the work.
@@ -211,6 +213,8 @@ def recurse(problem: str, *, client, config: RecurseConfig | None = None) -> Run
                 trace.next_tier = index + 1
                 continue
             metered.check()
+            if cfg.memory_session is not None and not metered.memory_ready:
+                metered.memory_context(problem, notes)
             _prepare_seed(metered, cfg, trace, problem, answer, notes, index)
             try:
                 result = trm.run_tier(metered, cfg, tier, problem, answer, notes, trace, deadline, index)
@@ -285,7 +289,14 @@ def plan_schedule(cfg: RecurseConfig | None = None) -> str:
                      + (len(cfg.ladder) * cfg.memory_max_rounds if cfg.preseed_ladder else 0)) if cfg.workspace is not None else (
                      sum(cfg.steps_for(t) * cfg.n * cfg.memory_max_rounds for t in cfg.ladder) if cfg.use_headroom else 0)
     lines.append(f"Additional ceilings: {extra} seed/planning calls; {retrieval_max} requested archive replay calls.")
-    lines.append(f"Absolute scheduled ceiling (before hard caps): {worst + extra + retrieval_max}.")
+    memory_calls=0
+    if cfg.memory_session is not None:
+        models=cfg.memory_session.models
+        turns=sum(cfg.steps_for(t) for t in cfg.ladder)+1
+        memory_calls=turns*(int(models.controller is not None)+int(models.selector is not None)+
+                            int(cfg.memory_auto_write and models.writer is not None))
+        lines.append(f"Additional private-memory role ceiling: {memory_calls}; offline consolidation is not scheduled.")
+    lines.append(f"Absolute scheduled ceiling (before hard caps): {worst + extra + retrieval_max + memory_calls}.")
     if cfg.workspace is not None:
         lines.append(f"Bounded archive workspace: {cfg.workspace.budget} visible input units; worker answers must use workspace_patch. Whole judges remain exact.")
     if cfg.enforce_progress:

@@ -122,10 +122,16 @@ def run_tier(client, cfg: RecurseConfig, tier: Tier, problem: str,
     for _ in range(start_step, cfg.steps_for(tier)):
         client.check()
         step_start = time.monotonic()
+        prior_answer = answer
         snippets, retrieval_error = _retrieve(cfg, problem, scratchpad)
+        memory_context = ""
+        if cfg.memory_session is not None:
+            if not client.memory_ready:
+                memory_context = client.memory_context(problem, scratchpad)
+            client.memory_ready = False
         # Structure/provenance labels live in the template, not in the text being
         # compressed. Whole reference items retain their internal mathematics.
-        context = "\n\n".join(snippets)
+        context = "\n\n".join(snippets + ([memory_context] if memory_context else []))
         rejected = 0
         truncated = False
         before, after = trace.tokens_before, trace.tokens_after
@@ -240,6 +246,8 @@ def run_tier(client, cfg: RecurseConfig, tier: Tier, problem: str,
                 scratchpad += f"\n\n[CHECKER FEEDBACK]\n{feedback}"
         trace.current_answer, trace.current_scratchpad = answer, scratchpad
         client.flush()
+        if accepted and cfg.memory_session is not None:
+            client.memory_accept(problem, prior_answer, answer, scratchpad)
         if halted:
             return TierResult(answer, scratchpad, True, reason_stop)
         if converged:

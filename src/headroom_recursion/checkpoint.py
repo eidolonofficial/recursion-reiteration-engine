@@ -24,6 +24,9 @@ def policy(cfg) -> dict:
     from dataclasses import asdict
     return {
         **({"workspace": asdict(cfg.workspace)} if cfg.workspace is not None else {}),
+        "memory_auto_write": cfg.memory_auto_write,
+        "memory_identity": cfg.memory_session.identity if cfg.memory_session else None,
+        "observations_enabled": cfg.observation_ledger is not None,
         "n": cfg.n, "T": cfg.T,
         "ladder": [[t.model, t.max_steps, t.max_tokens, t.step_timeout_s] for t in cfg.ladder],
         "judge_model": cfg.judge_model or (cfg.ladder[-1].model if cfg.enforce_progress else None),

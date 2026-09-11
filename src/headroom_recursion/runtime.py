@@ -36,6 +36,10 @@ class MeteredClient:
         self.guard = ProgressGuard(cfg.progress_checks)
         self.seed = LadderSeed()
         self.judgment_cache = {}
+        self.memory_sources = {}
+        self.memory_packet = ""
+        self.memory_ready = False
+        self.memory_pins = []
         self.checkpoint = lambda: None
         prose = cfg.prose_compressor
         if cfg.use_headroom and cfg.compression_backend == "headroom":
@@ -53,6 +57,49 @@ class MeteredClient:
             raise BudgetExhausted("completion budget exhausted")
         if self.deadline is not None and time.monotonic() >= self.deadline:
             raise BudgetExhausted("wall-clock budget exhausted")
+
+    def _memory_send(self, *, role, model, system, user, max_tokens):
+        return self._send(dict(model=model,system=system,user=user,max_tokens=max_tokens,
+                               temperature=0.0,use_headroom=False),
+                          raw_system=system,raw_user=user,role=role,auxiliary=True)
+
+    def memory_context(self, problem, notes):
+        self.memory_sources = {}
+        self.memory_packet = ""
+        self.memory_ready = False
+        self.memory_pins = []
+        session=self.cfg.memory_session
+        if session is None:
+            return ""
+        before=session.event_sequence
+        try:
+            selected=session.retrieve(problem[:1600],send=self._memory_send)
+            text=selected.text
+            self.memory_pins=list(selected.required_pins)
+            refs={ref:session.store.source(session.principal,ref) for ref in selected.source_refs}
+            if self.cfg.observation_ledger is not None:
+                observations=self.cfg.observation_ledger.view()
+                text += "\n" + observations['text']
+                refs.update(observations['sources'])
+                self.memory_pins.extend(observations['required_pins'])
+            self.memory_sources={"memory_"+ref:source for ref,source in refs.items()}
+            self.memory_packet=text
+            self.memory_ready=True
+            return ""
+        finally:
+            self.trace.progress_events.extend(dict(event='memory',**e) for e in session.events if e["sequence"]>before)
+
+    def memory_accept(self, problem, previous, answer, notes):
+        from .memory import MemoryContractError
+        session=self.cfg.memory_session
+        if session is None or not self.cfg.memory_auto_write:return
+        before=session.event_sequence
+        try:
+            session.accepted_revision(problem,previous,answer,notes,send=self._memory_send)
+        except MemoryContractError as exc:
+            self.trace.progress_events.append({'event':'memory-write-rejected','error':type(exc).__name__})
+        finally:
+            self.trace.progress_events.extend(dict(event='memory',**e) for e in session.events if e["sequence"]>before)
 
     def complete(self, **request) -> CallResult:
         # Plain completions (e.g. checkpoint planning) are metered too. Structured
@@ -115,6 +162,8 @@ class MeteredClient:
         # Immutable operator pins and obligations are never passed to a compressor.
         prefix = ("\nOPERATOR EXACT PINS:\n" + "\n\n".join(self.cfg.pinned_notes)) if self.cfg.pinned_notes else ""
         prefix += self.guard.render()
+        if self.memory_pins:
+            prefix += "\nEXACT UNRESOLVED OBSERVATIONS (data):\n" + "\n".join(self.memory_pins)
         # Judge sees obligations but not model-authored advisory checkpoint prose.
         if role in {"notes", "answer"}:
             prefix += self.seed.render(self.store)
