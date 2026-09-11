@@ -121,8 +121,8 @@ are not autonomous model inference, and no general complexity result is claimed.
 
 ## v0.4.1 standalone release identity
 
-The user selected **Recursion Reiteration Engine** with skill slug and distribution
-name `recursion-reiteration-engine`, targeting a new repository under
+The user selected **Recursive Reiteration Engine** with skill slug and distribution
+name `recursive-reiteration-engine`, targeting a new repository under
 `eidolonofficial`. The verified input is the delivered `headroom-recursion` v0.4.0
 source ZIP, SHA-256:
 
@@ -131,7 +131,7 @@ source ZIP, SHA-256:
 This revision changes the release identity, documentation, console entry points,
 and create-only publication target. It retains `headroom_recursion` imports, the
 `recurse` command, all existing runtime modules and the original license. The
-`reiterate` and `recursion-reiteration-engine` commands resolve to the same CLI.
+`reiterate` and `recursive-reiteration-engine` commands resolve to the same CLI.
 The new repository starts from one fresh root commit; neither upstream repository
 is renamed, forked, transferred, or overwritten. Research archives and the supplied
 PDF are not included.
@@ -139,12 +139,12 @@ PDF are not included.
 This is a renamed derivative, not a claim of independently reproduced authorship,
 a new mathematical discovery, or a new model-performance benchmark.
 
-## Publication corrections: 2026-09-11
+## v0.5 efficient transport
 
-The user corrected the final slug to `recursion-reiteration-engine` and selected
-`eidolonofficial`. Publication preserves the existing standalone repository history.
-Qualification on Windows found a SQLite handle leak on rejected initialization and
-a platform-encoding assumption in a test. This revision closes the handle before
-reraising the original failure, checks that closure, and reads test sources as UTF-8.
-All other runtime modules and all Lean project files are unchanged. No research
-archives, credentials, authority databases, or model weights are included.
+This revision retains the license and the full earlier source record. Background
+credits are not repeated in the skill or coding instructions. It adds an explicit
+compact workspace-v2, bounded batched reads, local progress carry-forward, and
+run-local exact single-judgment reuse. Earlier wire behavior is still available.
+See references/efficiency.md for the trust and measurement boundaries. No claims
+of exclusive authorship, formal proof, model-quality parity, or universal optimal
+token savings are made.

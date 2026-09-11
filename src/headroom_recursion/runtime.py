@@ -35,6 +35,7 @@ class MeteredClient:
         trace.token_count_kind = self.meter.label
         self.guard = ProgressGuard(cfg.progress_checks)
         self.seed = LadderSeed()
+        self.judgment_cache = {}
         self.checkpoint = lambda: None
         prose = cfg.prose_compressor
         if cfg.use_headroom and cfg.compression_backend == "headroom":

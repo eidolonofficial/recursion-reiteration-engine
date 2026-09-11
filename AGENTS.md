@@ -1,75 +1,42 @@
-# Recursion Reiteration Engine: instructions for coding agents
+# Recursion Reiteration Engine
 
-This project is model-neutral. Use the execution environment supplied by the
-operator; do not infer a provider, select a remote service, or download a model.
-This file is applicable to any coding agent and does not supersede its own rules.
+Keep runtime model-neutral and dependency-free. Preserve the skill/distribution
+name `recursion-reiteration-engine`, Python namespace `headroom_recursion`, and
+`recurse` compatibility command. Repository: `eidolonofficial/recursion-reiteration-engine`.
 
-## Core invariants
+## Invariants
 
-Keep the recurrence explicit: n visible-note updates, one answer update, then
-verification. Model identifiers are opaque. A tier order is the operator's choice.
-Never equate a judge score with mathematical proof or a calibrated probability.
-Only an explicitly trusted sufficient check can emit a validated halt. A gate
-pass is insufficient. Statistical/provisional results require human review.
+Use visible notes, not hidden reasoning. Keep candidate math and exact assumptions.
+Reject invalid/truncated updates; restore answer and notes together. Only a trusted
+sufficient check can validate a result. Gates, finite tests, cached judgments, and
+empirical promotions do not prove universal claims. Models cannot alter locks,
+budgets, ladder order, proof verifiers, or issued receipts.
 
-Do not strip case, multiplication, subscripts, or meaningful whitespace from
-mathematical candidates. Empty/truncated updates must not destroy prior state.
-Every attempted completion, including failures and judge retries, consumes the
-call budget. Carry the chosen candidate with the notes and model that produced it.
+Count actual attempts, retries, and retrievals. Bound prompts including protocol
+text. Keep full evidence archived; reduce transmitted context, not truth. Preserve
+read authorization, ticket/scope binding, dependency closure, and full-state checks.
+Independent judge votes must never be replaced with repeated cached votes. Cached
+single judgments are run-local snapshots and are discarded on resume.
 
-Subprocess prompts must remain data on stdin; use literal argv and shell=False.
-Local callbacks, workers, and proof compilers are trusted code, not sandboxes.
-Do not silently enable automatic execution of generated checkers or proof text.
-Do not add an inference networking dependency or implicit model download.
+Prefer compact workspace-v2 for compatible workers; preserve workspace-v1. Batch
+exact reads, never silently truncate them. Keep tokenizer counts distinct from
+character estimates, caching discounts, network bytes, and actual billed usage.
+Do not claim replay proves fresh model reasoning quality.
 
-## Verification
+Use literal argv and stdin; no implicit inference network, install, or model
+selection. Workers/checkers are trusted code, not OS sandboxes. Keep authority
+stores and unrestricted evidence access off model tools. Freeze evaluation inputs
+and artifacts; seal confirmation before execution. Crashes consume exposure, and
+rollback never restores holdout freshness.
 
-Run `PYTHONPATH=src python -S -m unittest discover -s tests -v`.
-Run `PYTHONPATH=src python -S examples/rational_refinement.py`.
-Use visible, concise working notes; never require private hidden reasoning.
-Record which tests actually ran. Do not describe mocked Lean tests as real proofs
-or deterministic arithmetic examples as neural model evaluations.
+## Verification and export
 
-Keep source attribution and mathematical references. Exclude local data, weights,
-credentials, runtime traces, and inherited source history from releases. After any
-intentional export-file edit, regenerate EXPORT_MANIFEST.json using the documented
-command; the publish helper must fail closed on a digest mismatch.
+Run `PYTHONPATH=src python -B -S -m unittest discover -s tests -v`, plus the
+workspace, efficiency, progress, rational, and folding examples. Check Windows
+resource cleanup as well as Linux. State exactly what ran; mocked proofs and
+scripted workers are not formal proofs or neural benchmarks.
 
-## Compression and progress contracts
-
-Keep original evidence separate from compressed views. Compression belongs at the
-controller boundary, not in an ignored backend flag. Preserve exact task/answer
-bytes, explicit pins, and protected mathematical blocks. Never claim a lossy view
-is a semantic equivalent because a source hash exists. Count markers and replay
-costs; expose overflow and fallback. Test actual worker input.
-
-Models select source ids for checkpoints; they cannot set verification state,
-change the ladder, or expand budgets. Locked check regressions and checker errors
-fail closed. Roll back both answer and notes on a rejected revision. Regrade
-resumed incumbents; never trust serialized model scores. Keep cumulative budgets
-and scope/policy bindings. Do not turn a prose instruction into a claimed guarantee.
-
-Also run `PYTHONPATH=src python -S examples/progress_memory.py`. Upstream Headroom
-fixtures do not constitute a live third-party integration test. Do not import or
-redistribute the supplied research PDF or private runtime archives in the export.
-
-## Folding governance (v0.4)
-
-Never expose a Folding/Store handle or unrestricted private artifact lookup to a
-worker. Freeze artifact and policy identities before tests. Confirmation outcomes
-close the proposal family; crashes consume holdout access, and rollback cannot
-restore it. A model cannot supply its own promotion receipt or proof verifier.
-
-Maintain separate empirical, finite and formal evidence classes. Formal verifier
-registrations are trusted operator code; no proof kernel ships here. The research
-bridge disallows model-judge halts, even on score 1. Preserve exact historical
-bytes without claiming they are formally proved. Compare math outcomes and
-resource accounting independently of prompt size; no replay is a neural benchmark.
-Run the folding example and all folding adversarial tests after authority edits.
-
-## Release identity
-
-Keep `recursion-reiteration-engine` as the skill, distribution, and repository
-name. Preserve the `headroom_recursion` Python namespace and `recurse` entry point
-for compatibility; `reiterate` is the preferred command. Do not rename an upstream
-repository or import its history when preparing the standalone release.
+Keep LICENSE and provenance in the distribution, outside default model input.
+Exclude credentials, runtime databases, private traces, research archives, and
+weights. Regenerate `EXPORT_MANIFEST.json` after reviewed changes. Never overwrite
+unrelated files, change visibility, force-push, or rename the repository implicitly.

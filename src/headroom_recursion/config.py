@@ -95,6 +95,8 @@ class RecurseConfig:
     progress_k: int = 4
     progress_tokens: int = 1024
     progress_model: str | None = None
+    progress_seed_mode: str = "model"  # model selection or local carry-forward
+    reuse_exact_judgments: bool = False  # run-local snapshot; single-vote only
     progress_checks: tuple[Any, ...] = ()
     # Operator version for checker/corpus/custom-hook semantics on resume.
     verification_id: str = ""
@@ -122,6 +124,20 @@ class RecurseConfig:
     oracle_model: str | None = None
     oracle_timeout_s: float = 10.0
 
+    @classmethod
+    def efficient(cls, *, budget: int = 4096, **overrides) -> "RecurseConfig":
+        """Compact exact transport and local progress carry-forward. No new dependency.
+
+        Does not change recurrence depth or permit compressed whole-proof judging.
+        Explicit overrides win. A real tokenizer should be supplied by the host.
+        """
+        from .workspace import WorkspacePolicy
+        values = dict(workspace=WorkspacePolicy(budget=budget, compact=True,
+                      chunk_chars=768, max_optional_chunks=6),
+                      progress_seed_mode="local", reuse_exact_judgments=True)
+        values.update(overrides)
+        return cls(**values)
+
     def steps_for(self, tier: Tier) -> int:
         return tier.max_steps if tier.max_steps is not None else self.T
 
@@ -143,6 +159,10 @@ class RecurseConfig:
         _number("halt_threshold", self.halt_threshold, maximum=1, strict=True)
         _number("temperature", self.temperature, maximum=1)
         _integer("judge_votes", self.judge_votes)
+        if self.progress_seed_mode not in {"model", "local"}:
+            raise ValueError("progress_seed_mode must be model or local")
+        if type(self.reuse_exact_judgments) is not bool:
+            raise TypeError("reuse_exact_judgments must be a bool")
         for name in ("retrieval_k", "retrieval_query_chars", "retrieval_max_chars"):
             _integer(name, getattr(self, name))
         if self.max_total_calls is not None:

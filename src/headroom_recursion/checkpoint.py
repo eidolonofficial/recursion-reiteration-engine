@@ -33,6 +33,8 @@ def policy(cfg) -> dict:
         "max_input_tokens": cfg.max_input_tokens,
         "enforce_progress": cfg.enforce_progress, "preseed_ladder": cfg.preseed_ladder,
         "verification_id": cfg.verification_id,
+        "progress_seed_mode": cfg.progress_seed_mode,
+        "reuse_exact_judgments": cfg.reuse_exact_judgments,
         "checks": [[c.name, c.statement, c.required] for c in cfg.progress_checks],
         "validator_present": cfg.validator is not None, "oracle_sufficient": cfg.oracle_sufficient,
         "oracle_note": cfg.oracle_note, "oracle_rung": cfg.oracle_rung,

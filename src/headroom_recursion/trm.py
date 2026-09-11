@@ -1,7 +1,7 @@
 """The source recurrence: n working-note updates, one answer update, then judge.
 
 Text-state control is retained without binding F or G to a particular model.
-The sequence is inspired by recursive networks, not their training algorithm.
+The controller iterates text state; it does not train model weights.
 """
 from __future__ import annotations
 

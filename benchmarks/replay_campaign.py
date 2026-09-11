@@ -47,19 +47,19 @@ class Fixture:
     def __init__(self,folder):
         self.root=folder
         self.ex=folder/'exchange'
-        self.plan=json.loads((folder/'plan.json').read_text())
-        first=json.loads((self.ex/'001.request.json').read_text())
+        self.plan=json.loads((folder/'plan.json').read_text(encoding="utf-8"))
+        first=json.loads((self.ex/'001.request.json').read_text(encoding="utf-8"))
         self.problem=first['user'].split('PROBLEM:\n',1)[1].split('\n\nCANDIDATE ANSWER:',1)[0]
         self.original_seed=first['user'].split('\nCANDIDATE ANSWER:\n',1)[1].split('\n\nVISIBLE WORKING NOTES:',1)[0]
         self.seed= json.dumps(json.loads(self.original_seed),ensure_ascii=False,sort_keys=True)
-        raw=json.loads((folder/'live-trace.json').read_text())
+        raw=json.loads((folder/'live-trace.json').read_text(encoding="utf-8"))
         self.seed_notes=first['user'].split('\nVISIBLE WORKING NOTES:\n',1)[1].split('\n\nCheck the candidate',1)[0]
         self.final=raw['final_answer']
         self.final_obj=json.loads(self.final)
         self.registry=self.final_obj['certificates']
         self.seed_obj=json.loads(self.seed)
-        self.answers={t:(self.ex/f'{5*t:03d}.response.txt').read_text().strip() for t in range(1,101)}
-        self.notes={(t,j):(self.ex/f'{5*(t-1)+2+j:03d}.response.txt').read_text().strip()
+        self.answers={t:(self.ex/f'{5*t:03d}.response.txt').read_text(encoding="utf-8").strip() for t in range(1,101)}
+        self.notes={(t,j):(self.ex/f'{5*(t-1)+2+j:03d}.response.txt').read_text(encoding="utf-8").strip()
                     for t in range(1,101) for j in (1,2)}
         self.old=set(self.seed_obj['certificates'])
         for t,a in self.answers.items():

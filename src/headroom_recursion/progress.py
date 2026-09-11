@@ -112,8 +112,8 @@ def seed_candidates(text: str, store: MemoryStore, meter: TokenMeter, model: str
                     *, limit: int, token_budget: int) -> list[dict[str, str]]:
     """A bounded coarse pool. Protected originals also travel outside this view.
 
-    Newest unique blocks first. This is deterministic recency selection, not the
-    paper's vector retrieval. A model subsequently selects from this fixed pool.
+    Newest unique blocks first. This is deterministic recency selection, not
+    a semantic ranking model. A model may select from this fixed pool.
     """
     selected, seen = [], set()
     for block in reversed(blocks(text)):

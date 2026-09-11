@@ -35,6 +35,13 @@ def _prepare_seed(metered: MeteredClient, cfg: RecurseConfig, trace: RunTrace,
         return
     selected = fallback_seed(pool, max_keep=cfg.progress_k, meter=metered.meter,
                              model=model, token_budget=cfg.progress_tokens)
+    if cfg.progress_seed_mode == "local":
+        metered.seed = replace(selected, status="local-carry-forward")
+        trace.progress_events.append({"event": "tier-seed", "tier": index, "model": None,
+                                      "status": "local-carry-forward", "keep": list(selected.keep),
+                                      "next_check": "", "completion_calls": 0})
+        metered.flush()
+        return
     try:
         result = metered.complete_prompt(
             role="progress_seed", model=model, system=PLAN_SYSTEM,
@@ -271,7 +278,7 @@ def plan_schedule(cfg: RecurseConfig | None = None) -> str:
                      f"{cfg.judge_votes} judge) = {ordinary}; up to {retries} with parse retries")
     lines.append(f"Nominal maximum: {nominal}; maximum including judge retries: {worst}.")
     # This base schedule is NOT the total once memory/control calls are enabled.
-    extra = (len(cfg.ladder) if cfg.preseed_ladder else 0)
+    extra = (len(cfg.ladder) if cfg.preseed_ladder and cfg.progress_seed_mode == "model" else 0)
     if cfg.enforce_progress and (cfg.seed_answer or cfg.resume_from):
         extra += 2 * cfg.judge_votes
     retrieval_max = (sum(cfg.steps_for(t) * (cfg.n + 1) * cfg.memory_max_rounds for t in cfg.ladder)

@@ -38,6 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--research", action="store_true")
     parser.add_argument("--trace-dir", type=Path)
     parser.add_argument("--json", action="store_true", dest="as_json")
+    parser.add_argument("--efficient", action="store_true", help="compact workspace-v2, local progress carry-forward, exact single-judge reuse")
     parser.add_argument("--no-compression", action="store_true")
     parser.add_argument("--compression-backend", choices=("local", "headroom"), default="local")
     parser.add_argument("--scratchpad-tokens", type=int, default=1536)
@@ -86,6 +87,13 @@ def main(argv: list[str] | None = None) -> int:
                             pinned_notes=tuple(read_text(path) for path in args.pin_file),
                             checkpoint_path=args.checkpoint, resume_from=args.resume,
                             verification_id=args.verification_id)
+        if args.efficient:
+            if args.no_compression or args.compress_judge_notes:
+                raise ValueError("--efficient conflicts with --no-compression/--compress-judge-notes")
+            cfg.workspace = WorkspacePolicy(budget=args.workspace_tokens or 4096, compact=True,
+                                            chunk_chars=768, max_optional_chunks=6)
+            cfg.progress_seed_mode = "local"
+            cfg.reuse_exact_judgments = True
         cfg.validate()
         if args.dry_run:
             print(plan_schedule(cfg))

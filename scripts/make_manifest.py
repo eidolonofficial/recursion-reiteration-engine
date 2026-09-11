@@ -29,8 +29,8 @@ def main() -> None:
     manifest = {'schema_version': 1, 'target': 'eidolonofficial/recursion-reiteration-engine',
                 'source_commit': '23e6758e3b95510736711c9eb09d68fbf91063be',
                 'files': files}
-    (root / 'EXPORT_MANIFEST.json').write_text(
-        json.dumps(manifest, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+    (root / 'EXPORT_MANIFEST.json').write_bytes(
+        (json.dumps(manifest, indent=2, sort_keys=True) + '\n').encode('utf-8'))
     print(f'Recorded {len(files)} reviewed export files; manifest is not a signature.')
 
 
