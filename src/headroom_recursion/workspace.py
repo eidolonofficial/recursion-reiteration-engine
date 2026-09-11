@@ -256,7 +256,7 @@ def build_view(runtime, *, role: str, model: str, system: str,
             planning = {"entering_tier": record["entering_tier"],
                         "candidates": record["candidates"], "max_keep": record["max_keep"]}
         except (KeyError, TypeError, ValueError) as exc:
-            raise TransportError("invalid internal planning payload")
+            raise TransportError("invalid internal planning payload") from exc
     texts = {name: text for name, text in texts.items() if text or name == "candidate"}
     refs = {name: runtime.store.put(text) for name, text in texts.items()}
     base = refs["candidate"]
