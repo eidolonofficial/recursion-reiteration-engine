@@ -288,7 +288,19 @@ class MemoryStore:
     def pending_count(self, principal):
         return self.db.execute('SELECT count(*) FROM pending WHERE owner=? AND project=?', self._scope(principal)).fetchone()[0]
 
-    def reserve_batch(self, principal):
+    def pending_entries(self, principal):
+        # Removing stale queue pointers does not remove any source or version.
+        with self.transaction():
+            self.db.execute('''DELETE FROM pending WHERE owner=? AND project=? AND
+                (NOT EXISTS (SELECT 1 FROM head WHERE head.owner=pending.owner
+                  AND head.project=pending.project AND head.ref=pending.ref)
+                 OR EXISTS (SELECT 1 FROM entry WHERE entry.id=pending.ref AND entry.invalidated=1))''',
+                self._scope(principal))
+            rows=self.db.execute('SELECT ref FROM pending WHERE owner=? AND project=? ORDER BY rowid LIMIT ?',
+                                (*self._scope(principal),self.policy.batch_size)).fetchall()
+            return [self.get(principal,r[0]) for r in rows]
+
+    def reserve_batch(self, principal, *, refs=None):
         if not self.policy.allow_private_consolidation:
             return None
         import uuid
@@ -296,17 +308,21 @@ class MemoryStore:
             jobs=self.db.execute('SELECT count(*) FROM job WHERE owner=? AND project=?',self._scope(principal)).fetchone()[0]
             if jobs>=self.policy.max_records:
                 raise Error('consolidation job history capacity reached')
-            rows = self.db.execute('SELECT ref FROM pending WHERE owner=? AND project=? ORDER BY rowid LIMIT ?',
-                                   (*self._scope(principal), self.policy.batch_size)).fetchall()
-            if not rows:
-                return None
-            entries = [self.get(principal,r[0]) for r in rows]
+            entries=self.pending_entries(principal)
+            if refs is not None:
+                if (type(refs) is not tuple or not refs or len(refs)>self.policy.batch_size or
+                        any(type(r) is not str for r in refs) or len(set(refs))!=len(refs)):
+                    raise Error('invalid selected consolidation batch')
+                offered={e['id']:e for e in entries}
+                if not set(refs)<=set(offered):raise Error('stale or unoffered consolidation batch')
+                entries=[offered[r] for r in refs]
+            if not entries:return None
             heads = {e['key']:self.head(principal,e['key'])['id'] for e in entries}
             body = {'entries':[e['id'] for e in entries], 'heads':heads}
             jid = uuid.uuid4().hex
             self.db.execute("INSERT INTO job VALUES(?,?,?,?,'reserved',NULL)", (jid,*self._scope(principal),wire(body)))
-            for r in rows:
-                self.db.execute('DELETE FROM pending WHERE owner=? AND project=? AND ref=?', (*self._scope(principal),r[0]))
+            for e in entries:
+                self.db.execute('DELETE FROM pending WHERE owner=? AND project=? AND ref=?', (*self._scope(principal),e['id']))
         return {'id':jid,'entries':entries,'heads':heads}
 
     def stage(self, principal, job_id, draft):

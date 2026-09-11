@@ -126,3 +126,19 @@ interface cannot inspect hidden work. Counter labels, neural-backend attestation
 and held-out representativeness remain explicit. A deterministic test is not a
 neural quality study. Cached/prefill tokens, context occupancy and latency must be
 reported separately. No v0.6 neural savings percentage is asserted.
+
+## Whole-record packet pressure and quality gates
+
+Controller history and writer heads are selected as complete records within the
+role packet budget. The exact accepted interaction is never shortened to make a
+writer call fit: oversized input is archived without a model write. A writer may
+update only heads actually offered before inference. Consolidation selects whole
+current entries before reservation; unselected entries remain queued. Stale queue
+pointers may be removed, never their original sources or historical versions.
+An impossible consolidation packet does not consume its pending batch.
+
+Fresh-response evaluation reports per-case regressions separately from gains.
+Equal aggregate success is not non-regression. The finite regression gate requires
+all reduced-arm tasks to succeed and no incomplete attempts; it is not statistical
+promotion. Timed-out output is unobserved, not a measured zero-token completion.
+Use the accounting completeness flag before interpreting cost-per-success.

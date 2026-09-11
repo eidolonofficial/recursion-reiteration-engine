@@ -160,3 +160,12 @@ draft's vector/shared-graph paths. Sources and tests contain no user research
 transcripts or runtime databases. Existing attribution and license are retained.
 The architecture uses bounded role separation and incremental private records;
 no trained model, paper benchmark replication or universal proof is claimed.
+
+## Completion audit
+
+The unpublished v0.6.0 draft `8f98660` was recovered from the operator's worktree,
+not replaced from memory. A separate checkout preserved that work and hardened
+whole-record role packet selection, current-entry consolidation reservations and
+paired quality regression reporting. The observed local-model regression and
+timeout remain documented in TESTING.md. No failed experiment was relabelled as
+quality-preserving compression. Existing license bytes and Git history remain.

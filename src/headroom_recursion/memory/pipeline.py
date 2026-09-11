@@ -60,6 +60,9 @@ class MemorySession:
         if len(self.events)>2048:
             del self.events[:-2048]
 
+    def _fits(self, role, payload):
+        return len(PROMPTS[role]) + len(wire(payload)) <= self.policy.packet_chars
+
     def _call(self,role,payload,send):
         model=getattr(self.models,role)
         if model is None:
@@ -89,8 +92,17 @@ class MemorySession:
         if self.models.controller is None:
             self._emit({'stage':'controller','mode':'literal-query-fallback'})
             return fallback
-        obj=self._call('controller',{'query':query,'recent':self.recent[-3:],
-                                    'max_queries':self.policy.max_queries},send)
+        payload={'query':query,'recent':[], 'max_queries':self.policy.max_queries}
+        if not self._fits('controller',payload):
+            self._emit({'stage':'controller','mode':'literal-query-fallback','reason':'exact query exceeds role cap'})
+            return fallback
+        # Select whole recent summaries, newest first; never truncate their contents.
+        for turn in reversed(self.recent[-3:]):
+            for summary in reversed(turn['accepted_summaries']):
+                prior=payload['recent']
+                payload['recent']=[{'accepted_summaries':[summary]}]+prior
+                if not self._fits('controller',payload):payload['recent']=prior
+        obj=self._call('controller',payload,send)
         fields(obj,{'queries'})
         qs=obj['queries']
         if type(qs) is not list or not 1<=len(qs)<=self.policy.max_queries:
@@ -201,10 +213,17 @@ class MemorySession:
             head=self.store.head(self.principal,selected['key'])
             if head and head['id']==selected['id'] and not head['invalidated']:
                 offered[head['key']]=head
-        snapshot={key:row['id'] for key,row in offered.items()}
-        payload={'user':user_text,'accepted_response_or_delta':response_text,
-                 'heads':[self._public(r) for r in offered.values()],
+        payload={'user':user_text,'accepted_response_or_delta':response_text,'heads':[],
                  'summary_chars':self.policy.summary_chars,'max_items':self.policy.max_writes}
+        if self.models.writer is not None and not self._fits('writer',payload):
+            self._emit({'stage':'writer','mode':'archive-only','reason':'whole accepted interaction exceeds role cap'})
+            return ()
+        available=offered;offered={}
+        for key,row in available.items():
+            payload['heads'].append(self._public(row))
+            if self._fits('writer',payload):offered[key]=row
+            else:payload['heads'].pop()
+        snapshot={key:row['id'] for key,row in offered.items()}
         if self.models.writer is not None:
             try:
                 obj=self._call('writer',payload,send); fields(obj,{'items'}); items=obj['items']
@@ -272,13 +291,23 @@ class MemorySession:
     def consolidate(self,*,send=None):
         if self.models.consolidator is None:
             raise Error('offline consolidation requires an explicit model')
-        batch=self.store.reserve_batch(self.principal)
-        if batch is None:
-            return None
+        if not self.policy.allow_private_consolidation:return None
+        candidates=self.store.pending_entries(self.principal)
+        if not candidates:return None
+        payload={'entries':[],'max_items':self.policy.max_writes,'summary_chars':self.policy.summary_chars}
+        selected=[]
+        for entry in candidates:
+            payload['entries'].append(self._public(entry))
+            if self._fits('consolidator',payload):selected.append(entry['id'])
+            else:payload['entries'].pop()
+        if not selected:
+            raise ContextLimitError('no whole consolidation entry fits; queue and sources retained')
+        batch=self.store.reserve_batch(self.principal,refs=tuple(selected))
+        if batch is None:return None
         try:
             entries=[self._public(e) for e in batch['entries'] if not e['invalidated'] and batch['heads'][e['key']]==e['id']]
-            obj=self._call('consolidator',{'entries':entries,'max_items':self.policy.max_writes,
-                                         'summary_chars':self.policy.summary_chars},send)
+            payload['entries']=entries
+            obj=self._call('consolidator',payload,send)
             h=self.store.stage(self.principal,batch['id'],obj)
             self.turns=0
             self._emit({'stage':'consolidate','job':batch['id'],'status':'private-proposal-awaiting-host-review'})

@@ -2,42 +2,73 @@
 
 ## Current qualification
 
-Executed on Windows Python 3.14.4: **398 tests passed without skips**. All six
-examples passed: private memory, efficiency, workspace, progress memory, rational
-refinement and folding. The private-memory example retained its exact 27,000-
-character successful tool log while rendering a 595-character observation view.
-That is a constructed observation-view measurement, not a total-token or neural
-quality claim. The controller made four completion calls to its deterministic
-worker; no memory model was configured.
+The recovered unpublished implementation was `8f98660`, descended from the
+published `690fcbe`. Its 398 tests passed again before changes. After packet,
+consolidation-queue and quality-report hardening, **409 tests passed without skips**
+on Windows Python 3.14.4. All six executable examples passed. An offline wheel
+built without downloading runtime dependencies. Final fresh-clone, installation,
+manifest and publication checks are recorded in the release verification receipt.
 
-Run the complete unittest suite and `examples/private_memory_demo.py` from the
-reviewed tree. The private-memory tests cover scope isolation, source durability,
-version conflicts, atomic rollback, pinned constraints, dependency invalidation,
-role-output forgery, concurrent writer updates, bounded exact deltas, private
-consolidation approval and Windows database cleanup. Context-mechanism tests cover
-literal search pagination and edit authorization, immutable scoped receipts,
-checker mutation, whole-candidate judging, private-store checkpoint binding,
-shared call budgets, exact tool schemas and failure-inclusive paired evaluation.
-A constructed 100-record admission test checks preservation and finite coverage;
-it does not rerun the external P-versus-NP experiments or establish a new proof.
+The 11 added regression methods cover whole-summary controller windows, bounded
+writer head selection, oversized accepted interactions, non-consuming consolidation
+overflow, stale queue pointers, current-head reservations, irrelevant tool discovery,
+matched quality regressions, unknown timeout output and non-statistical gate scope.
+The full suite covers principal isolation, durable versions/sources, dependency
+invalidation, concurrent writes, model authority forgery, exact search authorization,
+scoped receipt invalidation, controller budgets and paired answer/notes rollback.
 
-The release receipt records the executed test count and environment, example
-runs, fresh-checkout qualification, manifest checks and private publication state.
-Tests use deterministic workers. No fresh neural-model comparison, trained memory
-model, learned-compressor trial, hidden subagent benchmark, KV-cache performance
-study or Lean/Mathlib rebuild is claimed for this release. Test callbacks are not
-representative held-out task evaluation. Every reported character count is labelled
-as such; historical tokenizer savings below belong to v0.5, not v0.6.
+The private-memory example retains an exact **27,000-character** successful tool
+log while rendering a **595-character** observation view. This is a constructed
+view-level measurement, not total model-token savings. Its controller used four
+calls to a deterministic worker. The tiny efficiency example actually expands
+input from 876 to 1,213 estimated units; compression is not universally beneficial.
+The workspace example preserved its full history with 864,926 reference input
+characters versus 330,485 transmitted characters. These examples are not neural
+quality studies and their savings must not be added together.
+
+A 100-record admission regression verifies unchanged history and finite coverage;
+it does not rerun the external P-versus-NP experiments or prove a complexity claim.
+
+## Fresh local neural smoke test: failed quality screen
+
+Eight fresh generations ran through the already-installed local Ollama CLI using
+`llama3.2:latest`, model ID `a80c4f17acd5` (3.2B Q4_K_M). Model identity was checked
+before and after each completed call; no weights were downloaded. The local CLI
+used its existing sampling defaults, not a claimed seeded or temperature-controlled
+study. No hosted inference API was used.
+
+Four constructed tasks asked about the saved P-versus-NP progress record:
+NO_CERTIFICATE versus UNSAT, the codimension minimum for independent clauses,
+the failed promotion gate, and the unresolved universal target. Full-context arms
+included repetitive unrelated completed-task text; reduced arms retained the exact
+relevant statement. The answer checker required exact typed JSON results.
+
+Both arms scored 3/4, but this does **not** establish quality preservation. On the
+codimension task, reduced context returned 2 instead of 3 while full context was
+correct. On another task, the full arm timed out at 90 seconds. The paired screen
+therefore fails: one regression and one incomplete attempt. No compression policy
+or solver champion was promoted on these results. This is not a representative
+held-out benchmark, a new SAT run, or a formal proof.
+
+The accounting retains the timed-out attempt and marks its generated output and
+native token usage unknown. Returned full-arm calls reported 1,963 prompt tokens
+and 21 output tokens (three calls); reduced calls reported 366 and 26 (four calls).
+Those are unequal observed subsets, **not** comparable complete cost totals. The
+initial diagnostic receipt failed to align counts after the timeout; its retained
+correction binds every returned output to its exact response hash. No percentage
+of neural token/cost savings is claimed. `quality_eval.evaluate` now exposes matched
+regressions, incomplete attempts, and accounting completeness explicitly.
+
+Trained LightMem components, vector/shared-graph memory, learned-compressor quality,
+recursive child-agent orchestration, KV-cache performance and Lean/Mathlib builds
+were not reproduced. The pipeline separates private retrieval, selection, writing
+and host-reviewed consolidation; its no-model fallback is deterministic lexical
+retrieval and exact accepted deltas. License/provenance remain outside prompts.
 
 ```sh
 PYTHONPATH=src python -B -S -m unittest discover -s tests -v
 PYTHONPATH=src python -B -S examples/private_memory_demo.py
-python -B -S scripts/publish.py
 ```
-
-A manifest mismatch after an intentional code edit is expected until the reviewed
-allowlist is regenerated. Unknown mismatches must be investigated, not suppressed.
-The publisher's create-only mode is not used to update the existing private repo.
 
 ---
 

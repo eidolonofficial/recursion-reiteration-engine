@@ -28,6 +28,7 @@ class ToolCatalog:
         ordered=sorted(self._items.values(),key=lambda d:(-len(q&_words(d['name']+' '+d['description'])),d['name']))
         out=[]
         for d in ordered:
+            if not q & _words(d['name']+' '+d['description']):continue
             item={'name':d['name'],'description':d['description'][:160]}
             if len(wire(out+[item]))>max_chars:continue
             out.append(item)

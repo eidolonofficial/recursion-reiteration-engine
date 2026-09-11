@@ -69,9 +69,26 @@ def evaluate(cases, *, client, verifier, model, backend_kind, backend_identity,
         r=[row for row in rows if row['arm']==arm];success=sum(row['checked_success'] for row in r)
         units=sum(row['input']+row['output']+row['preparation'] for row in r)
         summary[arm]={'attempts':len(r),'checked_successes':success,'all_visible_units':units,
+                      'unobserved_output_attempts':sum('response_hash' not in row for row in r),
+                      'infrastructure_or_format_failures':sum(row['status']!='checked' for row in r),
                       'preparation_units':sum(row['preparation'] for row in r),
                       'units_per_checked_success':units/success if success else None}
-    return {'schema':1,'backend_kind':backend_kind,'backend_identity':backend_identity,'model':model,
+    pairs=[]
+    for case in cases:
+        for repeat in range(repeats):
+            arms={r['arm']:r for r in rows if r['case']==case.key and r['repeat']==repeat}
+            full,reduced=arms['full'],arms['reduced']
+            pairs.append({'case':case.key,'repeat':repeat,
+                'full_success':full['checked_success'],'reduced_success':reduced['checked_success'],
+                'regression':full['checked_success'] and not reduced['checked_success'],
+                'gain':reduced['checked_success'] and not full['checked_success']})
+    gate={'scope':'finite paired regression screen, not statistical promotion',
+          'regressions':sum(p['regression'] for p in pairs),
+          'incomplete_attempts':sum(r['status']!='checked' for r in rows)}
+    gate['passed']=gate['regressions']==0 and gate['incomplete_attempts']==0 and all(p['reduced_success'] for p in pairs)
+    return {'schema':1,'paired':pairs,'regression_gate':gate,
+            'accounting_complete':all('response_hash' in r for r in rows),
+            'backend_kind':backend_kind,'backend_identity':backend_identity,'model':model,
             'counter':meter.label,'rows':rows,'summary':summary,'population_claim':False,
             'preparation_scope':'Host-supplied measured context-preparation units are counted once per case; unspecified preparation is zero, not measured free.',
             'scope':'Fresh callback executions. Neural status is an operator attestation, not detected from response text.'}
