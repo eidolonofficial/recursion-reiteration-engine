@@ -169,3 +169,7 @@ whole-record role packet selection, current-entry consolidation reservations and
 paired quality regression reporting. The observed local-model regression and
 timeout remain documented in TESTING.md. No failed experiment was relabelled as
 quality-preserving compression. Existing license bytes and Git history remain.
+
+The recovered draft was published as v0.6.0 while this hardening was being
+qualified. The finishing changes are v0.6.1, a normal descendant that preserves
+that release and its assets rather than moving the existing tag.

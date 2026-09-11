@@ -1,6 +1,6 @@
 # Recursion Reiteration Engine
 
-## v0.6.0: private memory integration
+## v0.6.1: private memory integration
 
 Continues verified base `690fcbe535a8c02850992e5ba8bd66e84a7a02d3` without
 rewriting history. Private user/project records retain exact sources, versions,

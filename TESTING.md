@@ -1,8 +1,12 @@
-# Verification: v0.6.0
+# Verification: v0.6.1
 
 ## Current qualification
 
-The recovered unpublished implementation was `8f98660`, descended from the
+During final publication, main advanced to the exact recovered parent `8f98660`.
+Its v0.6.0 release is preserved; these additional fixes are released as v0.6.1.
+No existing tag, release asset or Git history is replaced.
+
+The implementation recovered at the start was `8f98660`, descended from the
 published `690fcbe`. Its 398 tests passed again before changes. After packet,
 consolidation-queue and quality-report hardening, **409 tests passed without skips**
 on Windows Python 3.14.4. All six executable examples passed. An offline wheel
