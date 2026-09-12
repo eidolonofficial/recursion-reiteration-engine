@@ -53,3 +53,6 @@ full suite. Do not publish database files, jobs, transcripts or local model stat
 Use `--simple` for compatible workers: one typed action, zero preliminary notes
 by default. Keep checker feedback separate. Failed commands are not working notes;
 repeated-rejection state persists across checkpoints.
+
+Schema-bound workers require actual decoder support; see references/structured-output.md.
+Keep raw responses and separate format validity, feasibility and optimality.

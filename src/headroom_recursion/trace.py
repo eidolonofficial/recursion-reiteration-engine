@@ -87,6 +87,7 @@ class RunTrace:
     resumed: bool = False
     rejection_counts: dict[str, int] = field(default_factory=dict)
     feedback: str = ""
+    best_objective: float | None = None
 
     def add(self, step: StepTrace) -> None:
         self.steps.append(step)

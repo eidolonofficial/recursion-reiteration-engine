@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 from . import demo
-from .clients import CallableClient, CommandClient, ManualClient, strict_json
+from .clients import CallableClient, CommandClient, ManualClient, TransportError, strict_json
 from .config import RecurseConfig, Tier
 from .workspace import WorkspacePolicy
 from .ladder import RunError, plan_schedule, recurse
@@ -20,6 +20,7 @@ def main(argv: list[str] | None = None) -> int:
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--manual", action="store_true", help="exchange visible prompts and responses by hand")
     source.add_argument("--command-json", help='literal JSON argv, e.g. ["python", "my_local_worker.py"]')
+    source.add_argument("--lmstudio-port", type=int, help="explicit localhost LM Studio server; model must already be loaded")
     source.add_argument("--demo", action="store_true", help="run a fixed exact-arithmetic demonstration, not a neural model")
     parser.add_argument("--problem-file", type=Path)
     parser.add_argument("--dry-run", action="store_true")
@@ -50,6 +51,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--memory-writer-model")
     parser.add_argument("--memory-k", type=int, default=5)
     parser.add_argument("--memory-capacity", type=int, default=10000)
+    parser.add_argument("--structured-output", action="store_true", help="require schema-constrained generation")
+    parser.add_argument("--response-schema", type=Path, help="payload-only JSON schema; implies --structured-output")
     parser.add_argument("--simple", action="store_true", help="one typed proposal per step; Python checks results")
     parser.add_argument("--efficient", action="store_true", help="compact workspace-v2, local progress carry-forward, exact single-judge reuse")
     parser.add_argument("--no-compression", action="store_true")
@@ -72,6 +75,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--scope", default="local")
     parser.add_argument("--verification-id", default="")
     args = parser.parse_args(argv)
+    if args.structured_output or args.response_schema:
+        args.simple = True
     def read_text(path):
         if path is None:
             return ""
@@ -137,6 +142,8 @@ def main(argv: list[str] | None = None) -> int:
                 cfg.memory_session = MemorySession(memory_store, principal, models=models)
         elif any((args.memory_user,args.memory_project,args.memory_controller_model,args.memory_selector_model,args.memory_writer_model)):
             raise ValueError("memory options require --memory-db")
+        cfg.structured_output = bool(args.structured_output or args.response_schema)
+        cfg.response_schema = strict_json(read_text(args.response_schema)) if args.response_schema else None
         cfg.validate()
         if args.dry_run:
             print(plan_schedule(cfg))
@@ -161,12 +168,15 @@ def main(argv: list[str] | None = None) -> int:
                 problem = data.decode("utf-8")
             if not problem.strip():
                 raise ValueError("provide a nonempty problem")
-            if args.manual:
+            if args.lmstudio_port is not None:
+                from .lmstudio_client import LMStudioClient
+                client = LMStudioClient(args.lmstudio_port, timeout_s=args.call_timeout)
+            elif args.manual:
                 client = ManualClient()
             elif args.command_json:
                 client = CommandClient(strict_json(args.command_json), timeout_s=args.call_timeout)
             else:
-                raise ValueError("choose --manual or --command-json; no backend is selected automatically")
+                raise ValueError("choose --manual, --command-json or --lmstudio-port; no backend is selected automatically")
             if args.research:
                 problem = research_prompt(problem)
         if args.corpus:
@@ -183,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:
               if args.as_json else trace.summary())
         return 130 if trace.stop_reason == "interrupted" else 1 if trace.stop_reason in {
             "failed", "error", "context-budget", "memory-budget", "checkpoint-error", "seed-unscored"} else 0
-    except (ValueError, TypeError, OSError, UnicodeError, ImportError) as exc:
+    except (ValueError, TypeError, OSError, UnicodeError, ImportError, TransportError) as exc:
         print(f"recurse: {exc}", file=sys.stderr)
         return 2
     finally:

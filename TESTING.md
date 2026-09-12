@@ -1,4 +1,70 @@
-# Verification: v0.7.0 worker actions
+# Verification: v0.8.0 schema-constrained output
+
+The reviewed source passed **480 tests** on Windows Python 3.14.4: 455 inherited
+methods and 25 new schema/transport/state regressions. The release receipt records
+fresh-clone verification, examples, offline wheel and isolated installation.
+No Linux, Lean/Mathlib or real frontier-model inference run is claimed.
+
+The new tests cover required schema propagation, unsupported-backend rejection
+before inference, closed task payloads, raw fence rejection, unknown labels,
+truncation/refusal/cancellation, schema and source-version bindings, complete
+candidate visibility, retained feasible objectives, checkpoint re-evaluation,
+task-owned repeat identities and legacy compatibility. The optional HTTP adapter
+is tested separately for fixed localhost addressing, no redirect following, no
+implicit model loading and no network activity on invalid local controls.
+
+## Actual local Gemma comparison
+
+The final runtime source ran against the already-installed Gemma 3 4B Q4_K_M,
+8192 loaded context, one slot, native temperature 0 and max_tokens 128. Unlike the
+older CLI adapter, response_format and both generation controls reach the decoder.
+No SDK, weights, hosted inference or third-party package was installed. The tested
+interface is LM Studio's local REST API, not literally API-free execution.
+
+The first pair used identical v0.7 prompts and output controls. The unconstrained
+response was malformed. The constrained response was valid JSON matching the
+required nested selection schema, but its selection lacked prerequisites. Both
+used 981 native tokens. This isolates the format fix; order, caching and concurrent
+CPU work prevent treating their timing difference as a controlled speed result.
+
+| Final-source arm | Calls | Schema-valid | Feasible | Optimal | Native tokens |
+|---|---:|---:|---:|---:|---:|
+| Same input, unconstrained envelope | 1 | 0 | Not reached | Not reached | 981 |
+| Same input, constrained envelope | 1 | 1 | 0 | 0 | 981 |
+| Payload-only, original solve-map view | 2 | 2 | 0 | 0 | 1,958 |
+| Payload-only, equivalent direct facts | 2 | 2 | 0 | 0 | 1,074 |
+| Direct facts, reduced cost-cap variant | 2 | 2 | 0 | 0 | 1,074 |
+| Direct facts, changed-value variant | 2 | 2 | 0 | 0 | 1,074 |
+
+All nine completed constrained outputs satisfied their schemas. All eight
+payload proposals reached the checker; none was feasible. Every failed payload
+arm stopped after its repeated proposal. The direct view used fewer tokens in
+this failed-task comparison, not fewer tokens per successful solve. No such
+successful-task saving or population-quality claim is made.
+
+A separate adversarial format smoke request asked for Markdown: the decoder still
+returned only the required JSON (36 native tokens). A max_tokens=1 probe stopped
+with length, returned no complete payload and was rejected (29 native tokens).
+The final qualification therefore used 12 actual generations and 7,207 native
+tokens including the unconstrained control and deliberate truncation. An earlier
+retained development pass used another 12 generations and 7,207 tokens; both
+passes are accounted for, not silently pooled as independent task examples.
+
+The original twelve-project task was preserved exactly. The existing Python
+solver and an independent combinations-based checker examined its 4,096 subsets,
+found 99 feasible selections and confirmed optimum 67. The solver-assisted witness
+B,D,E,F,H,J costs 24 with crew 12; it is Python computation, not a Gemma discovery.
+Two variants were frozen before their first inference but remain a tiny diagnostic
+set, not a representative held-out benchmark. No schema, prompt or checker was
+retuned after inspecting the final qualification outputs.
+
+LightMem, compression, archive-search and symbolic-map source files remain
+byte-identical to v0.7.0. The new output boundary does not reproduce LightMem's
+training, latency measurements or LoCoMo/DialSim evaluations.
+
+---
+
+# Historical verification: v0.7.0 worker actions
 
 455 tests passed on Windows Python 3.14.4 after the worker change: the inherited
 432 methods plus 19 worker-contract methods and four finite-selection methods.

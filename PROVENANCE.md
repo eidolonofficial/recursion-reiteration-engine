@@ -181,3 +181,11 @@ worker interface, host-owned checker feedback, durable bounded rejection trackin
 and a finite Python arithmetic example. No new model weights or learned compressor
 are introduced. The existing license notices remain outside runtime prompts.
 The failed local-model trial and its bounded termination are documented in TESTING.md.
+
+## v0.8.0 output-boundary extension
+
+Continues 32e483579f4ec9b490c1b5570e3c08b5714600e2. Adds an original bounded
+schema contract and optional localhost LM Studio adapter using the standard library.
+The adapter sends the documented native response_format to the installed GGUF
+decoder; no upstream implementation or new model weights are bundled. LightMem,
+compression, solve-map sources, licenses and previous releases remain unchanged.

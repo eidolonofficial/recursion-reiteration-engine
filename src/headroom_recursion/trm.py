@@ -6,6 +6,7 @@ The controller iterates text state; it does not train model weights.
 from __future__ import annotations
 
 import time
+import math
 from dataclasses import dataclass
 from . import claims as claims_mod
 from . import halting, prompts
@@ -76,6 +77,17 @@ def _safe_validate(validator, answer: str) -> tuple[bool, str, Verdict | None]:
         return result, "", None
     except Exception as exc:
         return False, f"validator failed: {type(exc).__name__}", None
+
+
+def _objective(cfg, answer):
+    if cfg.objective is None: return None, ""
+    try:
+        value=cfg.objective(answer)
+        if type(value) not in (int,float) or not math.isfinite(value):
+            raise ValueError("objective must be a finite number")
+        return value, ""
+    except Exception as exc:
+        return None, "objective unavailable: "+type(exc).__name__
 
 
 def _safe_feedback(feedback, answer: str) -> str:
@@ -186,6 +198,8 @@ def run_tier(client, cfg: RecurseConfig, tier: Tier, problem: str,
             seen.add(_norm(answer))
         progress = client.guard.evaluate(answer)
         passed, validator_error, verdict_obj = _safe_validate(cfg.validator, answer)
+        objective_value, objective_error = _objective(cfg,answer) if progress.accepted else (None, "")
+        validator_error = validator_error or objective_error
         eligible_output = bool(answer) and not cut
         validated = bool(cfg.validator is not None and cfg.oracle_sufficient
                          and passed and not validator_error and eligible_output and progress.accepted)
@@ -201,6 +215,8 @@ def run_tier(client, cfg: RecurseConfig, tier: Tier, problem: str,
         elif validator_error or gate_rejected or not eligible_output or not progress.accepted:
             score, reason = 0.0, "mechanically rejected, regressed, or incomplete candidate; judge skipped"
             valid_score = False
+        elif cfg.objective is not None:
+            score, reason = 0.0, "host-checked feasible candidate; optimality not established"
         else:
             # One operator-selected judge for all tiers makes the incumbent score
             # comparable under a fixed rubric. This does not calibrate that score.
@@ -215,9 +231,12 @@ def run_tier(client, cfg: RecurseConfig, tier: Tier, problem: str,
             valid_score = judgment.valid_votes > cfg.judge_votes // 2
         nonregression = (not cfg.enforce_progress or not trace.has_incumbent or
                          (trace.seed_scored and score >= trace.best_halt_prob) or validated)
+        if cfg.objective is not None:
+            nonregression = objective_value is not None and (trace.best_objective is None or objective_value >= trace.best_objective)
         accepted = bool(eligible_output and not validator_error and not gate_rejected and progress.accepted and valid_score and nonregression)
         converged = converged and accepted
         if accepted:
+            if cfg.objective is not None: trace.best_objective = objective_value
             if answer != prior_answer:
                 trace.rejection_counts.clear()
             trace.feedback = ""
@@ -244,7 +263,8 @@ def run_tier(client, cfg: RecurseConfig, tier: Tier, problem: str,
             trace.completed_steps[tier_index] += 1
         trace.progress_events.append({"event": "candidate", "model": tier.model, "accepted": accepted,
                                       "score": score, "missing": list(progress.missing),
-                                      "nonregression": nonregression, "fresh_output": fresh_output})
+                                      "nonregression": nonregression, "fresh_output": fresh_output,
+                                      "objective": objective_value})
         rejected_answer = answer
         if not accepted and cfg.enforce_progress and trace.has_incumbent:
             # Roll back BOTH components; do not pair old answers with unapproved
@@ -263,7 +283,15 @@ def run_tier(client, cfg: RecurseConfig, tier: Tier, problem: str,
         if accepted and cfg.memory_session is not None:
             client.memory_accept(problem, prior_answer, answer, scratchpad)
         if not accepted:
-            record_rejection(trace, "candidate", rejected_answer, cfg.max_repeated_rejections)
+            identity = rejected_answer
+            if cfg.candidate_identity is not None:
+                try:
+                    identity = cfg.candidate_identity(rejected_answer)
+                    if type(identity) is not str or len(identity)>32768: raise ValueError("invalid task identity")
+                except Exception:
+                    identity = rejected_answer
+                    trace.progress_events.append({"event":"identity-fallback","kind":"exact-text"})
+            record_rejection(trace, "candidate", identity, cfg.max_repeated_rejections)
         if halted:
             return TierResult(answer, scratchpad, True, reason_stop)
         if converged:

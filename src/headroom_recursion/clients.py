@@ -20,8 +20,11 @@ class CallResult:
     tokens_after: int = 0
     stop_reason: str = ""
     cost_usd: float = 0.0
+    usage: dict[str, int] | None = None  # native token counts; None means unknown
 
     def __post_init__(self) -> None:
+        if self.usage is not None and (type(self.usage) is not dict or any(type(k) is not str or type(v) is not int or v < 0 for k,v in self.usage.items())):
+            raise ValueError("usage must contain nonnegative native token counts")
         if not isinstance(self.text, str) or not isinstance(self.stop_reason, str):
             raise TypeError("text and stop_reason must be strings")
         for name in ("tokens_before", "tokens_after"):
@@ -36,7 +39,7 @@ class CallResult:
 class CompletionClient(Protocol):
     def complete(self, *, model: str, system: str, user: str,
                  max_tokens: int = 2048, temperature: float = 0.7,
-                 use_headroom: bool = False) -> CallResult: ...
+                 use_headroom: bool = False, response_schema: dict | None = None) -> CallResult: ...
 
 
 class TransportError(RuntimeError):

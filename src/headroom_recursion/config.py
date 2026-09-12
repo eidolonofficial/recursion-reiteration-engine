@@ -73,6 +73,10 @@ class RecurseConfig:
     judge_can_halt: bool = True
     compress_judge: bool = False
     compact_json_transport: bool = False  # measured lossless request framing only
+    structured_output: bool = False
+    response_schema: dict | None = None  # payload only; no generated routing metadata
+    candidate_identity: Any = None  # task-owned repeat identity, not generic list sorting
+    objective: Any = None  # trusted feasible-candidate score, not proof probability
     # Local prompt compression is active by default. No inference service is used.
     use_headroom: bool = True
     compression_backend: str = "local"  # local | headroom (already installed)
@@ -177,6 +181,15 @@ class RecurseConfig:
         cfg.validate()
         return cfg
 
+    @classmethod
+    def structured(cls, response_schema=None, **options):
+        """Explicit schema-enforced worker; existing completion clients stay compatible."""
+        cfg = cls.simple(**options)
+        cfg.structured_output = True
+        cfg.response_schema = response_schema
+        cfg.validate()
+        return cfg
+
     def steps_for(self, tier: Tier) -> int:
         return tier.max_steps if tier.max_steps is not None else self.T
 
@@ -223,6 +236,21 @@ class RecurseConfig:
             self.workspace.validate()
             if self.compress_judge:
                 raise ValueError("workspace mode requires exact full judge inputs")
+        if type(self.structured_output) is not bool:
+            raise TypeError("structured_output must be bool")
+        if self.structured_output and (self.workspace is None or not self.workspace.typed_actions):
+            raise ValueError("structured output requires the typed workspace")
+        if self.response_schema is not None:
+            from .response_schema import schema_copy
+            schema_copy(self.response_schema)
+            if not self.structured_output or self.n != 0:
+                raise ValueError("payload-only schema mode needs structured output and zero note calls")
+        for name in ("candidate_identity", "objective"):
+            if getattr(self,name) is not None and (not callable(getattr(self,name)) or not self.verification_id):
+                raise ValueError(name+" requires a versioned host callback")
+        if self.objective is not None and (not self.enforce_progress or self.judge_can_halt or
+                not self.oracle_sufficient or self.validator is None or not any(c.required for c in self.progress_checks)):
+            raise ValueError("objective mode needs required feasibility checks and a separate sufficient validator")
         if type(self.compact_json_transport) is not bool:
             raise TypeError("compact_json_transport must be bool")
         if self.workspace is not None and self.workspace.solve_map and self.memory_session is None:

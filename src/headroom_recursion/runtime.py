@@ -118,6 +118,10 @@ class MeteredClient:
         self.check()
         request = dict(request, use_headroom=False)  # no hidden second compressor in a worker
         model = request["model"]
+        schema = request.get("response_schema")
+        if schema is not None:
+            from .response_schema import require_schema
+            request["response_schema"] = require_schema(self.client, model, schema)
         before = self.meter.prompt(raw_system, raw_user, model)
         framing=None
         # Only known model-facing envelopes are eligible. Whole judgments and
@@ -143,6 +147,10 @@ class MeteredClient:
         event = {"index": self.trace.attempted_calls, "model": model, "role": role,
                  "input_before": before, "input_after": after, "counter": self.meter.label,
                  "status": "attempted", "auxiliary": auxiliary}
+        if schema is not None:
+            from .checkpoint import digest
+            event["response_schema"] = digest(schema)
+            event["schema_units"] = self.meter.count(json.dumps(schema,separators=(",",":")),model)
         if framing is not None:event["json_transport"]=framing
         self.trace.call_events.append(event)
         self.trace.reported_tokens_before += before
@@ -154,12 +162,20 @@ class MeteredClient:
             result = self.client.complete(**request)
             if not isinstance(result, CallResult):
                 raise TypeError("completion backend must return CallResult")
-            if result.stop_reason in {"error", "refusal", "refused"}:
-                raise TransportError("backend returned an error/refusal, not a completion")
-            self.trace.successful_calls += 1
             out_tokens = self.meter.count(result.text, model)
             event.update(status="returned", output_tokens=out_tokens,
                          backend_tokens_before=result.tokens_before, backend_tokens_after=result.tokens_after)
+            if result.usage is not None:
+                event["native_usage"] = dict(result.usage)
+            if schema is not None:
+                self.store.put(result.text)
+            if result.stop_reason in {"error", "refusal", "refused", "cancelled", "canceled"}:
+                event["status"] = result.stop_reason
+                if schema is not None:
+                    from .response_schema import InvalidStructuredOutput
+                    raise InvalidStructuredOutput("structured generation did not complete: "+result.stop_reason)
+                raise TransportError("backend returned an error/refusal, not a completion")
+            self.trace.successful_calls += 1
             if auxiliary:
                 self.trace.auxiliary_tokens += out_tokens
             if self.deadline is not None and time.monotonic() >= self.deadline:

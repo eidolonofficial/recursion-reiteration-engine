@@ -70,6 +70,12 @@ def _prepare_seed(metered: MeteredClient, cfg: RecurseConfig, trace: RunTrace,
 
 def _grade_seed(metered, cfg, trace, problem, answer, notes, model) -> str:
     """Install an actual baseline, never the seed's own claimed score."""
+    if cfg.response_schema is not None:
+        from .response_schema import parse_payload, InvalidStructuredOutput
+        try: parse_payload(answer,cfg.response_schema)
+        except InvalidStructuredOutput:
+            trace.current_rejected=True
+            return "rejected"
     decision = metered.guard.evaluate(answer)
     if not decision.accepted:
         trace.current_rejected = True
@@ -89,9 +95,14 @@ def _grade_seed(metered, cfg, trace, problem, answer, notes, model) -> str:
             trace.best_answer = trace.best_scratchpad = trace.best_model = ""
             raise ValueError("resumed incumbent failed its required gate")
         return "rejected"
+    objective_value, objective_error = trm._objective(cfg,answer)
+    if objective_error: return "unscored"
+    if cfg.objective is not None: trace.best_objective = objective_value
     sufficient = cfg.validator is not None and cfg.oracle_sufficient and passed and not error
     if sufficient:
         score = 1.0
+    elif cfg.objective is not None:
+        score = 0.0  # feasible score is not a proof probability
     else:
         judge_problem, _, _ = trm.judgment_context(cfg, problem, answer,
                                                    passed=passed, validator_error=error)
@@ -108,7 +119,7 @@ def _grade_seed(metered, cfg, trace, problem, answer, notes, model) -> str:
     trace.seed_scored = True
     metered.guard.commit(decision)
     trace.progress_events.append({"event": "seed-graded", "score": score,
-                                  "authority": "supplied sufficient check" if sufficient else "heuristic judge"})
+                                  "authority": "supplied sufficient check" if sufficient else "host feasible objective" if cfg.objective is not None else "heuristic judge"})
     if sufficient and verdict:
         trace.validated_confidence = verdict.confidence
         trace.settles_at = verdict.settles_at or ""
@@ -121,6 +132,12 @@ def recurse(problem: str, *, client, config: RecurseConfig | None = None) -> Run
     original = config or RecurseConfig()
     original.validate()
     cfg = replace(original, ladder=tuple(original.ladder))
+    if cfg.structured_output:
+        from .response_schema import require_schema, schema_copy
+        if cfg.response_schema is not None:
+            cfg.response_schema = schema_copy(cfg.response_schema)
+        for model in dict.fromkeys(t.model for t in cfg.ladder):
+            require_schema(client,model,cfg.response_schema or {"type":"string"})
     if not isinstance(problem, str) or not problem.strip():
         raise ValueError("problem must be a nonempty string")
     if not callable(getattr(client, "complete", None)):

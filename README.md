@@ -1,5 +1,16 @@
 # Recursion Reiteration Engine
 
+## v0.8.0: schema-constrained output
+
+`RecurseConfig.structured(schema, ...)` adds a payload-only response contract at
+actual inference time. The optional `LMStudioClient` uses an already-loaded local
+GGUF model; no SDK, hosted provider or runtime package dependency is added.
+Unsupported clients fail before inference. Python retains source bindings, full
+checks, feasible incumbents and repeat accounting. Existing memory and compression
+algorithms are unchanged. See [the contract](references/structured-output.md) and
+[executed qualification](TESTING.md). `examples/structured_selection.py` separates
+model proposals from an explicit exact-solver mode.
+
 ## v0.7.0: one checked worker action
 
 Use `RecurseConfig.simple(...)` or `--simple` for one typed proposal per step.

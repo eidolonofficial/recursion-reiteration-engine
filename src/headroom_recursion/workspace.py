@@ -507,6 +507,10 @@ def complete_workspace(runtime, *, role, model, system, template, values,
              "selected_ranges": {n: _merge(v) for n, v in view.ranges.items()},
              "retrievals": [], "status": "prepared"}
     runtime.trace.workspace_events.append(event)
+    if runtime.cfg.structured_output and role in {"notes", "answer"}:
+        from .structured_worker import complete_structured
+        return complete_structured(runtime,view,event,role=role,model=model,
+            raw_system=system,raw_user=raw_user,max_tokens=max_tokens,temperature=temperature)
     rounds = 0
     result = None
     try:
