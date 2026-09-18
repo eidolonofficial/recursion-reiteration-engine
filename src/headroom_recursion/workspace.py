@@ -164,6 +164,13 @@ class WorkingView:
             aliases = self.aliases()
             packet = {k: v for k, v in self.packet.items() if k not in {"schema", "scope", "base", "enforcement", "solve_snapshot"}}
             packet["schema"] = "workspace-v2"
+            feedback=packet.get('feedback')
+            matches=[row for row in packet.get('observations',{}).get('observations',[])
+                     if isinstance(feedback,str) and feedback and row.get('exact_output')==feedback]
+            if len(matches)==1:
+                row=matches[0]
+                packet['feedback']={'observation':row['id'],'revision':row['revision'],
+                                    'field':'exact_output'}
             guard = self.packet["enforcement"]
             packet["checks"] = {k: guard[k] for k in ("registered", "locked", "required")}
             packet["sources"] = {
@@ -429,8 +436,16 @@ def build_view(runtime, *, role: str, model: str, system: str,
         packet["feedback"] = runtime.trace.feedback
     if getattr(runtime, "memory_packet", ""):
         packet["memory_advice"] = runtime.memory_packet
+    observation_text=getattr(runtime,"observation_packet","")
+    covered=set()
+    if observation_text:
+        observations=strict_json(observation_text)
+        packet['observations']=observations
+        from .memory.contracts import wire
+        covered={wire(row) for row in observations['observations']}
     if getattr(runtime, "memory_pins", []):
-        packet["unresolved_observations"] = list(runtime.memory_pins)
+        # Preserve judge pins on the host; each identical observation is sent once.
+        packet["unresolved_observations"]=[p for p in runtime.memory_pins if p not in covered]
     solve_map=getattr(runtime,"solve_map",None)
     if solve_map is not None:
         packet["solve_snapshot"]=solve_map.identity

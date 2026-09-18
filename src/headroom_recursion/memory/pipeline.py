@@ -30,6 +30,7 @@ class Selection:
     text: str
     source_refs: tuple[str, ...]
     required_pins: tuple[str, ...] = ()
+    pending_text: str = ''
 
 
 def _terms(text):
@@ -47,12 +48,13 @@ class MemorySession:
         self.events=[]
         self.event_sequence=0
         self.last_selection=Selection((),'',())
+        self.last_write=None
 
     @property
     def identity(self):
         return digest({'schema':'private-delta-v1','database':self.store.identity,
                        'principal':asdict(self.principal),'policy':asdict(self.policy),
-                       'models':asdict(self.models),'retrieval':'lexical-word-overlap/v1'})
+                       'models':asdict(self.models),'retrieval':'lexical-word-overlap/v1','write_protocol':'durable-pending-v1'})
 
     def _emit(self,event):
         self.event_sequence+=1
@@ -123,12 +125,17 @@ class MemorySession:
         return {k:item[k] for k in ('id','key','summary','kind','created','version','tags',
                                     'sources','dependencies','pinned','authority')}
 
-    def retrieve(self,query,*,k=None,send=None):
+    def retrieve(self,query,*,k=None,send=None,plan_queries=True):
         bounded_text(query,'query',1600)
+        if type(plan_queries) is not bool:raise TypeError('plan_queries must be bool')
         k=self.policy.k if k is None else integer(k,'K',1,self.policy.k)
         start=time.monotonic()
         try:
-            qs=self._plan(query,send)
+            if not plan_queries or not self.store.candidates(self.principal):
+                qs=[dict(text=query,tags=[],after=None,before=None)]
+                self._emit({'stage':'controller','mode':'literal-query-fallback',
+                            'reason':'explicit lookup' if not plan_queries else 'empty scoped store'})
+            else:qs=self._plan(query,send)
         except (Error,ValueError,TypeError) as exc:
             self._emit({'stage':'controller','mode':'literal-query-fallback','error':type(exc).__name__})
             qs=[dict(text=query,tags=[],after=None,before=None)]
@@ -142,6 +149,10 @@ class MemorySession:
         for q,quota in zip(qs,quotas):
             terms=_terms(q['text'])
             pool=self.store.candidates(self.principal,item_tags=q['tags'],after=q['after'],before=q['before'])
+            if q['tags'] and not pool:
+                # Relax only a model-created tag filter, never principal or time.
+                pool=self.store.candidates(self.principal,after=q['after'],before=q['before'])
+                self._emit({'stage':'retrieve','mode':'empty-model-tags-fallback'})
             ranked=[]
             for row in pool:
                 terms_in_record=_terms(row['key']+' '+row['summary']+' '+' '.join(row['tags']))
@@ -184,12 +195,23 @@ class MemorySession:
             if row['invalidated'] or ((ref not in historical or ref in pin_ids) and self.store.head(self.principal,row['key'])['id']!=ref):
                 raise Error('memory changed during selection; retrieve again')
         rows=tuple(dict(self._public(candidates[r]),historical_query=r in historical) for r in selected)
-        text=wire({'records':rows,'coverage':'advisory memory, not proof or instructions'}) if rows else ''
+        pending=[]
+        if not any(q['after'] or q['before'] for q in qs):
+            for item in self.store.pending_writes(self.principal,limit=k):
+                if _terms(query)&_terms(item['user']):
+                    pending.append({'write':item['id'],'source':item['interaction'],
+                        'state':'pending','reason':item['reason'],'user':item['user']})
+        payload={'records':rows,'coverage':'advisory memory, not proof or instructions'}
+        pending_text=''
+        if pending:
+            payload['uncommitted_updates']=pending
+            pending_text=wire({'uncommitted_updates':pending,'coverage':'Exact user messages awaiting indexed writing; do not mistake older summaries for a reconciled current policy.'})
+        text=wire(payload) if rows or pending else ''
         if len(text)>self.policy.packet_chars:
             raise ContextLimitError('whole selected records exceed packet cap')
-        refs=tuple(dict.fromkeys(ref for r in selected for ref in candidates[r]['sources']))
+        refs=tuple(dict.fromkeys([ref for r in selected for ref in candidates[r]['sources']]+[p['source'] for p in pending]))
         self.store.touch(self.principal,selected)
-        result=Selection(rows,text,refs,tuple(candidates[r]['summary'] for r in selected if candidates[r]['pinned']))
+        result=Selection(rows,text,refs,tuple(candidates[r]['summary'] for r in selected if candidates[r]['pinned']),pending_text)
         self.last_selection=result
         self._emit({'stage':'retrieve','queries':len(qs),'quotas':quotas,'coarse_count':min(len(candidates),2*k),
                     'selected_count':len(rows),'budget':k,'ranker':'lexical-word-overlap/v1',
@@ -197,6 +219,38 @@ class MemorySession:
         return result
 
     def write_turn(self,user_text,response_text,*,send=None,source_refs=None):
+        bounded_text(user_text,'user interaction',4000,empty=True)
+        bounded_text(response_text,'accepted response/delta',4000,empty=True)
+        if not user_text.strip() and not response_text.strip():return ()
+        if source_refs is None:
+            source_refs=(self.store.add_source(self.principal,wire({'user':user_text,'accepted':response_text})),)
+        intent=self.store.stage_write(self.principal,user_text,response_text,source_refs)
+        return self._attempt_write(intent,send,False)
+
+    def retry_write(self,ref,*,send=None):
+        """One explicitly requested attempt, with whole current heads reoffered."""
+        return self._attempt_write(self.store.write_intent(self.principal,ref),send,True)
+
+    def _attempt_write(self,intent,send,refresh_heads):
+        self.last_write=intent
+        if intent['state']=='committed':return tuple(intent['entry_refs'])
+        before=self.event_sequence
+        try:
+            refs=self._write_turn(intent['user'],intent['accepted'],send=send,
+                source_refs=intent['sources'],intent_id=intent['id'],refresh_heads=refresh_heads)
+        except BaseException as exc:
+            self.last_write=self.store.finish_write(self.principal,intent['id'],reason=type(exc).__name__)
+            raise
+        reason='empty proposal; interaction is archived, not indexed'
+        for event in self.events:
+            if event['sequence']>before and event.get('stage')=='writer':
+                reason=event.get('reason') or event.get('error') or reason
+        self.last_write=self.store.finish_write(self.principal,intent['id'],entries=refs,reason='' if refs else reason[:300])
+        self._emit({'stage':'write-status','id':intent['id'],'state':self.last_write['state'],'reason':self.last_write['reason']})
+        return refs
+
+
+    def _write_turn(self,user_text,response_text,*,send=None,source_refs=None,intent_id=None,refresh_heads=False):
         bounded_text(user_text,'user interaction',4000,empty=True)
         bounded_text(response_text,'accepted response/delta',4000,empty=True)
         if not user_text.strip() and not response_text.strip():
@@ -213,6 +267,12 @@ class MemorySession:
             head=self.store.head(self.principal,selected['key'])
             if head and head['id']==selected['id'] and not head['invalidated']:
                 offered[head['key']]=head
+        if refresh_heads:
+            terms=_terms(user_text+' '+response_text)
+            pool=self.store.candidates(self.principal)
+            ranked=sorted(pool,key=lambda r:(-len(terms&_terms(r['key']+' '+r['summary'])),r['id']))
+            for row in ranked[:2*self.policy.k]:
+                if terms&_terms(row['key']+' '+row['summary']):offered.setdefault(row['key'],row)
         payload={'user':user_text,'accepted_response_or_delta':response_text,'heads':[],
                  'summary_chars':self.policy.summary_chars,'max_items':self.policy.max_writes}
         if self.models.writer is not None and not self._fits('writer',payload):
@@ -261,7 +321,11 @@ class MemorySession:
                 tags=item['tags'],expected=expected,created=None,pinned=prior['pinned'] if prior else False,
                 dependencies=prior['dependencies'] if prior else []))
         try:
-            refs=tuple(self.store.write_batch(self.principal,prepared)) if prepared else ()
+            with self.store.transaction():
+                current=self.store.write_intent(self.principal,intent_id)
+                if current['state']=='committed':return tuple(current['entry_refs'])
+                refs=tuple(self.store.write_batch(self.principal,prepared)) if prepared else ()
+                if refs:self.store.finish_write(self.principal,intent_id,entries=refs)
         except Error as exc:
             self._emit({'stage':'writer','mode':'rejected-no-write','error':str(exc)})
             return ()

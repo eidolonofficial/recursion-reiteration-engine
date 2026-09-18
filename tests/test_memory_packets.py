@@ -7,6 +7,7 @@ from headroom_recursion.tool_catalog import ToolCatalog
 
 class WholePacketTests(Fixture):
     def test_recent_window_is_selected_as_whole_summaries(self):
+        self.write("controller-input","evidence for a nonempty lookup")
         session=self.session(controller='supplied')
         summaries=['summary '+str(i)+' '+('x'*730)+' DO NOT ACCEPT.' for i in range(12)]
         session.recent=[{'accepted_summaries':summaries[i:i+4]} for i in range(0,12,4)]

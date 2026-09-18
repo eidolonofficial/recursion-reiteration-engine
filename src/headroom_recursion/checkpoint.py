@@ -23,6 +23,7 @@ def digest(value) -> str:
 def policy(cfg) -> dict:
     from dataclasses import asdict
     return {
+        "request_contract": "visible-payload-feedback-v2",
         **({"workspace": asdict(cfg.workspace)} if cfg.workspace is not None else {}),
         "memory_auto_write": cfg.memory_auto_write,
         "memory_identity": cfg.memory_session.identity if cfg.memory_session else None,

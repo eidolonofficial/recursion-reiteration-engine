@@ -184,6 +184,7 @@ class RoleTests(Fixture):
         self.assertEqual(len(r.records),1)
     def test_budget_exhaustion_not_swallowed_as_fallback(self):
         def exhausted(**kw):raise BudgetExhausted('bounded')
+        self.write('query','nonempty query evidence')
         with self.assertRaises(BudgetExhausted):self.session(controller='model').retrieve('query',send=exhausted)
     def test_writer_does_not_receive_database_or_other_user(self):
         session=self.session(writer='model');captured=[]

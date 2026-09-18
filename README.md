@@ -1,5 +1,20 @@
 # Recursion Reiteration Engine
 
+## v0.8.1: audited boundary and evaluation repairs
+
+**Status: engineering repair release.** Regression tests cover the identified
+boundary defects; improved model task completion and successful-task token
+savings have not yet been established by a fresh post-repair comparison.
+
+Payload-only requests include their exact candidate after serialization; retries
+carry fresh feedback. Observations are transmitted once without dropping judge
+evidence. Private memory writes have durable pending/committed receipts and
+explicit current-head retries. Empty-store and explicit lookups need no query model.
+The repaired paired pilot distinguishes test output, regression specificity,
+accepted-milestone recovery, memory recall and arithmetic application.
+See `references/audit-repairs.md` for interfaces, compatibility and evaluation scope.
+This release does not claim a trained LightMem reproduction or universal savings.
+
 ## v0.8.0: schema-constrained output
 
 `RecurseConfig.structured(schema, ...)` adds a payload-only response contract at

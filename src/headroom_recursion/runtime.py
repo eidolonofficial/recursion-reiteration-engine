@@ -38,6 +38,7 @@ class MeteredClient:
         self.judgment_cache = {}
         self.memory_sources = {}
         self.memory_packet = ""
+        self.observation_packet = ""
         self.memory_ready = False
         self.memory_pins = []
         self.solve_map = None
@@ -67,6 +68,7 @@ class MeteredClient:
     def memory_context(self, problem, notes):
         self.memory_sources = {}
         self.memory_packet = ""
+        self.observation_packet = ""
         self.memory_ready = False
         self.memory_pins = []
         self.solve_map = None
@@ -80,13 +82,14 @@ class MeteredClient:
             if self.cfg.workspace.solve_map and selected.records:
                 from .solve_map import SolveMap
                 self.solve_map=SolveMap(session,selected)
-                text=''
+                text=selected.pending_text
             self.memory_pins=list(selected.required_pins)
             refs=(dict(self.solve_map.sources) if self.solve_map is not None else
                   {ref:session.store.source(session.principal,ref) for ref in selected.source_refs})
+            refs.update({ref:session.store.source(session.principal,ref) for ref in selected.source_refs})
             if self.cfg.observation_ledger is not None:
                 observations=self.cfg.observation_ledger.view()
-                text += "\n" + observations['text']
+                self.observation_packet = observations['text']
                 refs.update(observations['sources'])
                 self.memory_pins.extend(observations['required_pins'])
             self.memory_sources={"memory_"+ref:source for ref,source in refs.items()}

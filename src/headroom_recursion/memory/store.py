@@ -51,6 +51,9 @@ class MemoryStore:
                 FOREIGN KEY(parent) REFERENCES entry(id));
             CREATE TABLE IF NOT EXISTS pending(owner TEXT,project TEXT,ref TEXT,
                 PRIMARY KEY(owner,project,ref), FOREIGN KEY(ref) REFERENCES entry(id));
+            CREATE TABLE IF NOT EXISTS write_intent(id TEXT PRIMARY KEY,owner TEXT,project TEXT,
+                body TEXT NOT NULL,state TEXT NOT NULL,reason TEXT NOT NULL,entries TEXT NOT NULL);
+            CREATE INDEX IF NOT EXISTS write_scope ON write_intent(owner,project,state);
             CREATE TABLE IF NOT EXISTS job(id TEXT PRIMARY KEY,owner TEXT,project TEXT,
                 body TEXT NOT NULL,state TEXT NOT NULL,draft TEXT);
             CREATE TABLE IF NOT EXISTS retirement(ref TEXT PRIMARY KEY,owner TEXT,project TEXT,resolution TEXT);
@@ -67,6 +70,64 @@ class MemoryStore:
         except BaseException:
             self.db.close()
             raise
+
+    def stage_write(self, principal, user, response, sources):
+        """Durable receipt before inference; acknowledgment is not indexed memory."""
+        bounded_text(user,'user interaction',4000,empty=True)
+        bounded_text(response,'accepted interaction',4000,empty=True)
+        if type(sources) not in (tuple,list) or not 1<=len(sources)<=8 or len(set(sources))!=len(sources):
+            raise Error('invalid write sources')
+        for ref in sources:self.source(principal,ref)
+        interaction=self.add_source(principal,wire({'user':user,'accepted':response}))
+        body={'owner':principal.user,'project':principal.project,'interaction':interaction,'sources':list(sources)}
+        ref=digest(body)
+        with self.transaction():
+            if not self.db.execute('SELECT id FROM write_intent WHERE id=?',(ref,)).fetchone():
+                counts=self.db.execute("SELECT count(*),sum(state='pending') FROM write_intent WHERE owner=? AND project=?",self._scope(principal)).fetchone()
+                if counts[0]>=self.policy.max_records or (counts[1] or 0)>=self.policy.max_pending:
+                    raise Error('write receipt capacity reached; sources retained')
+                self.db.execute('INSERT INTO write_intent VALUES(?,?,?,?,?,?,?)',
+                    (ref,*self._scope(principal),wire(body),'pending','awaiting writer','[]'))
+        return self.write_intent(principal,ref)
+
+    def write_intent(self, principal, ref):
+        row=self.db.execute('SELECT * FROM write_intent WHERE owner=? AND project=? AND id=?',(*self._scope(principal),ref)).fetchone()
+        if row is None:raise Error('write receipt unavailable')
+        body=json.loads(row['body'])
+        fields(body,{'owner','project','interaction','sources'})
+        bounded_text(row['reason'],'write reason',300,empty=True)
+        if digest(body)!=ref or (body['owner'],body['project'])!=self._scope(principal):raise Error('write receipt integrity failure')
+        interaction=json.loads(self.source(principal,body['interaction']))
+        for source in body['sources']:self.source(principal,source)
+        entries=json.loads(row['entries'])
+        if (row['state'] not in {'pending','committed'} or type(entries) is not list
+                or any(type(e) is not str for e in entries) or len(set(entries))!=len(entries)
+                or (row['state']=='committed')!=bool(entries)):
+            raise Error('invalid write receipt state')
+        for entry in entries:
+            item=self.get(principal,entry)
+            if not set(body['sources'])<=set(item['sources']):raise Error('write receipt source mismatch')
+        return dict(body,id=ref,state=row['state'],reason=row['reason'],entry_refs=entries,**interaction)
+
+    def finish_write(self, principal, ref, *, entries=(), reason=''):
+        bounded_text(reason,'write reason',300,empty=True)
+        with self.transaction():
+            current=self.write_intent(principal,ref)
+            if current['state']=='committed':return current
+            if type(entries) not in (tuple,list) or len(entries)>self.policy.max_writes or len(set(entries))!=len(entries):
+                raise Error('invalid committed memory references')
+            for entry in entries:
+                row=self.get(principal,entry)
+                if not set(current['sources'])<=set(row['sources']):raise Error('write source mismatch')
+            self.db.execute('UPDATE write_intent SET state=?,reason=?,entries=? WHERE id=?',
+                ('committed' if entries else 'pending',reason,wire(list(entries)),ref))
+        return self.write_intent(principal,ref)
+
+    def pending_writes(self, principal, *, limit=16):
+        if type(limit) is not int or not 1<=limit<=64:raise Error('invalid pending write limit')
+        rows=self.db.execute("SELECT id FROM write_intent WHERE owner=? AND project=? AND state='pending' ORDER BY rowid DESC LIMIT ?",(*self._scope(principal),limit)).fetchall()
+        return [self.write_intent(principal,r[0]) for r in rows]
+
 
     def close(self):
         self.db.close()
@@ -432,4 +493,6 @@ class MemoryStore:
             self.source(principal,row['resolution'])
             if not self.get(principal,row['ref'])['invalidated']:
                 raise Error('retirement integrity failure')
+        for row in self.db.execute('SELECT id,owner,project FROM write_intent'):
+            self.write_intent(Principal(row['owner'],row['project']),row['id'])
         return True

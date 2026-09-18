@@ -216,7 +216,7 @@ def run_tier(client, cfg: RecurseConfig, tier: Tier, problem: str,
             score, reason = 0.0, "mechanically rejected, regressed, or incomplete candidate; judge skipped"
             valid_score = False
         elif cfg.objective is not None:
-            score, reason = 0.0, "host-checked feasible candidate; optimality not established"
+            score, reason = 0.0, "host-checked candidate under declared progress coverage; task completion and optimality not established"
         else:
             # One operator-selected judge for all tiers makes the incumbent score
             # comparable under a fixed rubric. This does not calibrate that score.

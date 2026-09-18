@@ -189,3 +189,19 @@ schema contract and optional localhost LM Studio adapter using the standard libr
 The adapter sends the documented native response_format to the installed GGUF
 decoder; no upstream implementation or new model weights are bundled. LightMem,
 compression, solve-map sources, licenses and previous releases remain unchanged.
+
+## v0.8.1 forensic repairs
+
+Continues audited v0.8.0 commit d8de4ccb4a3cb8e6c14486ab9f52caf36e2a40bd.
+Repairs were derived from frozen requests and deterministic counterexamples,
+not from relabeling the failed three-round pilot. The public synthetic harness
+is now packaged for reproducibility; original private run artifacts stay outside
+this repository. Pending source receipts extend this engine, not the supplied
+LightMem paper's specialized training or cross-user long-term graph.
+
+## Public v0.8.1 publication
+
+Published at the operator's explicit request, preserving repository history and
+license notices. The audited repair source is retained; publication changes
+clarify validation scope. Private traces, runtime stores, credentials, model
+weights and the supplied research paper are not added to this distribution.

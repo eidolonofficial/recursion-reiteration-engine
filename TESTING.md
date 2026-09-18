@@ -1,4 +1,31 @@
-# Verification: v0.8.0 schema-constrained output
+# Verification: v0.8.1 audit repairs
+
+This release repairs final-packet candidate visibility, delivery of format-retry
+feedback, duplicate observations, unnecessary memory-query calls, pending memory
+writes, and evaluation-harness reporting. The source changes were recovered from
+the existing v0.8.1 worktree; the original worktree and failed pilot remain intact.
+
+The saved qualification ran 506 tests on Windows Python 3.14.4 and the same 506
+on Ubuntu through WSL, with both suites passing. All eight examples passed and
+an offline wheel built. Publication preparation recomputed every saved check-log
+hash and verified all exported source hashes. These are software checks, not
+1,012 independent test cases or neural-quality measurements.
+
+The added regressions cover exact candidate visibility without a progress seed,
+current retry feedback, escaped-input budgets, observation/revision attribution,
+persistent write receipts and explicit retries, and the repaired pilot grader.
+See references/audit-repairs.md for interfaces and checkpoint compatibility.
+
+A public-release verification receipt records fresh-clone and installed-package
+checks separately. No fresh post-repair LFM paired task result is claimed. Improved
+task completion, successful-task token savings, and frontier-model performance
+remain unproven. The original exposed pilot fixtures are development examples,
+not pristine holdouts. Structured-selection examples using --exact are Python
+solver executions, not model discoveries. This is not a trained LightMem replica.
+
+---
+
+# Historical verification: v0.8.0 schema-constrained output
 
 The reviewed source passed **480 tests** on Windows Python 3.14.4: 455 inherited
 methods and 25 new schema/transport/state regressions. The release receipt records
